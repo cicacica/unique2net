@@ -56,6 +56,21 @@ def swapbits(p1, p2, num):
     return res 
 
 
+def get_pos_ones(num):
+    """
+    Get positions of 1 in num within binary format.
+        example: 6 = 110, returns (1,2)
+    it is equivalent with extracting the powers of nonzero elements
+
+    :num: int, the number
+    """
+    max_len = len(bin(num)) - 2   #string format 0bxxxx
+    lnum = [int(bool(num & (1<<n))) for n in range(max_len)] #turn into list
+    poss = [i for i,e in enumerate(lnum) if e==1] #extract positions
+
+    return tuple(poss)
+
+
 
 ## listing gates and networks ##
 
@@ -138,6 +153,8 @@ def eliminate_relabelling(nqubit, gate_list):
 
     :nqubit: int, the number of qubits 
     :gate_list: list(tuple), the list of gate networks
+
+    return list(tuple)
     """
     #all possible swaps 
     lswaps = combinations(range(nqubit), 2) 
@@ -156,11 +173,67 @@ def eliminate_relabelling(nqubit, gate_list):
     return [g for g in gate_list if g]
         
         
-def eliminate_conjugation_by_swapping(nqubit, gate_list):
+def eliminate_conjugation_by_swapping(gate_list):
     """
-    Eliminate conjugation by swapping
+    Eliminate conjugation by swapping. Choose the a gates sandwiched by
+    identical gates, then swap it.
 
-    
+    :gate_list: list(tuple), the list of gate networks
+
+    return list(tuple)
+    """
+    for i, net in enumerate(gate_list):
+        for j, g in enumerate(net[1:-1]) : #inside big sandwich
+            mnet = list(net)  #get a mutable object
+            g1, g2 = net[j], net[j+2]  #small sandwich g1|g|g2
+            if g1 == g2 :
+                poss = get_pos_ones(g1)
+                g_swapped = swapbits(*poss, g) 
+                mnet[j+1] = g_swapped
+
+                if tuple(mnet) in gate_list : 
+                    gate_list[i] = False
+
+    #filter out the False nets
+    return [g for g in gate_list if g]
+
+
 
 ## main function ##
+
+def get_unique_2gates_networks(nqubit, network_length):
+    """
+    Get a list of unique 2-bit gates network by four eliminations
+    The format is binary with LSB convention. 
+
+    example: 
+            q0 ----
+            q1 ---- 
+            q2 ----
+    gate (q0,q1)=3, (q0,q2)=5, (q1,q2)=6 
+
+    :nqubit: int, the number of qubits
+    """
+    g2 = all_2g(nqubit) #all kind of gates
+
+    L = all_2g_networks(network_length, g2)
+    print(len(L))
+    L = eliminate3(L)
+    L = eliminate_relabelling(nqubit, L)
+    L = eliminate_time_reversal(L)
+    L = eliminate_conjugation_by_swapping(L)
+    print(len(L))
+
+    print("second iteration")
+
+    L = eliminate3(L)
+    L = eliminate_relabelling(nqubit, L)
+    L = eliminate_time_reversal(L)
+    L = eliminate_conjugation_by_swapping(L)
+    print(len(L))
+
+    
+    return L
+
+
 
