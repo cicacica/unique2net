@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from scipy.optimize import minimize
+#from scipy.optimize import minimize
 
 
 
@@ -64,8 +64,8 @@ def objective_function(U, S_tot):
 
     for i in range(dim):
         for j in range(dim):
-            if U(i,j) != 0.0 :
-                objective_val += np.abs(U(i,j)-S_tot(i,j))
+            if U[i,j] != 0.0 :
+                objective_val += np.abs(U[i,j]-S_tot[i,j])
 
     return objective_val
 
@@ -86,18 +86,19 @@ def main():
     #
     U1 = np.kron(Hadamard(),Hadamard())
     
+    print(len(U1))
     
     # initialize the guess X={x1,x2}, [0,2pi) as a list
     X = np.random.uniform(low=0.0, high=2*np.pi, size=2)
 
-    result = minimize(objective_function, X, args=(U1), method="BFGS") 
+#   result = minimize(objective_function, X, args=(U1), method="BFGS") 
     
     #should have result.val, result.x, and other
 
     #Check the result
 
-    print(template_J_CPHASE(result.x))
-    print(template_J_CPHASE(result['x']))
+#   print(template_J_CPHASE(result.x))
+#   print(template_J_CPHASE(result['x']))
 
     
 
