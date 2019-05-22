@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-from itertools import product, combinations #standard library
-
-""" unique2net.py: list all unique gates by eliminations
+__doc__=""" unique2net.py: list all unique gates by eliminations
     
     arXiv ref: cond-mat/9409111.
 
@@ -13,12 +11,16 @@ from itertools import product, combinations #standard library
 
         unique2net(nqubit, network_length)
 """
-
 __author__ = "Cica Gustiani"
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Cica Gustiani"
 __email__ = "cicagustiani@gmail.com"
+
+
+
+
+from itertools import product, combinations #standard library
 
 
 
