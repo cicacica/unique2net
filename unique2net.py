@@ -136,41 +136,32 @@ def eliminate3(gate_iter):
 
 
 
-def eliminate_time_reversal(gate_iter):
+def eliminate_time_reversal(gate_list):
     """
     Eliminate the ones in the reversed order
 
-    :gate_iter: iterator, the list of gate networks
+    :gate_iter: list(tuple|bool), the list of gate networks
 
     return iterator
     """
-    #I need to allocate memory :(
-    gate_list = list(gate_iter)
-
     for i, net in enumerate(gate_list):
-        rev_net = net[::-1]   #reverse net
-        if rev_net in gate_list : 
-            gate_list[i] = False
-
-    for g in gate_list :
-        if g : 
-            yield g
+        if net : 
+            rev_net = net[::-1]   #reverse net
+            if rev_net in gate_list : 
+                gate_list[i] = False
 
 
 
-def eliminate_relabelling(nqubit, gate_iter):
+def eliminate_relabelling(nqubit, gate_list):
     """
     Elimiate the ones which are equivalent by bit-relabelling
     It is equivalent by performing one swap
 
     :nqubit: int, the number of qubits 
-    :gate_iter: list(tuple), the list of gate networks
+    :gate_list: list(tuple|bool), the list of gate networks
 
     return iterator
     """
-    #again, allocate memory :(
-    gate_list = list(gate_iter)
-
     #all possible swaps 
     lswaps = combinations(range(nqubit), 2) 
 
@@ -184,39 +175,46 @@ def eliminate_relabelling(nqubit, gate_iter):
                 if tuple(net2) in gate_list : 
                     gate_list[i] = False
 
-    for g in gate_list : 
-        if g :
-            yield g
         
         
-def eliminate_conjugation_by_swapping(gate_iter):
+def eliminate_conjugation_by_swapping(gate_list):
     """
     Eliminate conjugation by swapping. Choose the a gates sandwiched by
     identical gates, then swap it.
 
-    :gate_iter: list(tuple), the list of gate networks
+    :gate_list: list(tuple|bool), the list of gate networks
 
     return list(tuple)
     """
-    # again allocation of memory :(
-    gate_list = list(gate_iter)
-
     for i, net in enumerate(gate_list):
-        for j, g in enumerate(net[1:-1]) : #inside big sandwich
-            mnet = list(net)  #get a mutable object
-            g1, g2 = net[j], net[j+2]  #small sandwich g1|g|g2
-            if g1 == g2 :
-                poss = get_pos_ones(g1)
-                g_swapped = swapbits(*poss, g) 
-                mnet[j+1] = g_swapped
+        if net : 
+            for j, g in enumerate(net[1:-1]) : #inside big sandwich
+                mnet = list(net)  #get a mutable object
+                g1, g2 = net[j], net[j+2]  #small sandwich g1|g|g2
+                if g1 == g2 :
+                    poss = get_pos_ones(g1)
+                    g_swapped = swapbits(*poss, g) 
+                    mnet[j+1] = g_swapped
 
-                if tuple(mnet) in gate_list : 
-                    gate_list[i] = False
+                    if tuple(mnet) in gate_list : 
+                        gate_list[i] = False
+
+
+def DS_eliminations(nqubit, gate_iter):
+    """
+    DiVincenzo and Smolin eliminations
+    I can't avoid memory allocation since I need a lookup table
+
+
+    :gate_iter: iter(tuple), the list of gate networks
+    """
+    gate_list = list(gate_iter)
+    eliminate_time_reversal(gate_list)
+    eliminate_relabelling(nqubit, gate_list)
+    eliminate_conjugation_by_swapping(gate_list)
 
     for g in gate_list : 
-        if g :
-            yield g
-
+        if g : yield g
 
 
 ## main function ##
@@ -233,17 +231,12 @@ def unique2net(nqubit, net_depth):
     gate (q0,q1)=3, (q0,q2)=5, (q1,q2)=6 
 
     :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+
+    return generator
     """
     g2 = all_2g(nqubit) #all kind of gates
-    L = all_2g_networks(net_depth, g2)
-    L = eliminate3(L)
-    L = eliminate_time_reversal(L)
-    L = eliminate_relabelling(nqubit,L)
+    GL = eliminate3(all_2g_networks(net_depth, g2))
+    G = DS_eliminations(nqubit, GL)
 
-    print(len(list(L)), "from", len(g2)**net_depth)
-
-    return L
-    
-
-
-
+    return G
