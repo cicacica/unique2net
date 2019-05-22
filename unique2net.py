@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-from itertools import product, combinations #standard lib
 
-""" gates_elimination.py: list all unique gates by eliminations
+from itertools import product, combinations #standard library
+
+""" unique2net.py: list all unique gates by eliminations
     
     arXiv ref: cond-mat/9409111.
+
+
+    USAGE: 
+
+        from unique2net import unique2net
+
+        unique2net(nqubit, network_length)
 """
 
 __author__ = "Cica Gustiani"
@@ -87,7 +95,7 @@ def all_2g(nqubit):
 
 
 
-def all_2g_networks(netsize, gates2):
+def all_2g_networks(network_size, gates2):
     """
     Return a list composing tuples of all possible 2-bit gates network
     with size netsize
@@ -95,23 +103,23 @@ def all_2g_networks(netsize, gates2):
     :nqubit: int, the number of qubits 
     :gates2: set, the set 2-qubit gates compsing the network
 
-    return list
+    return iterator
     """
-    return list(product(gates2, repeat=netsize))
+    return product(gates2, repeat=network_size)
 
 
 ## eliminations of 2-bit gate networks ##
 
-def eliminate3(gate_list):
+def eliminate3(gate_iter):
     """
     Eliminate the networks with > 3 consecutive occurrence of CNOTS. 
     Example: (1,3,3,3,3,1) is eliminated
 
-    :gate_list: list(tuple), the list of gate networks 
+    :gate_iter: iterator(tuple), the list of gate networks 
 
-    return list
     """
-    for i, net in enumerate(gate_list) : 
+    #track deleted indices
+    for net in gate_iter: 
         count, gate = 0, net[0]  
         for g in net : 
             if g == gate : 
@@ -120,42 +128,49 @@ def eliminate3(gate_list):
                 gate = g
                 count = 1
 
-            if count > 3 : #check >3 conscecutive occurence
-                gate_list[i] = False
+            if count == 4 : #check >3 conscecutive occurence
                 break
 
-    #filter out the False nets
-    return [g for g in gate_list if g]
+        if count < 4 :
+            yield net
 
 
 
-def eliminate_time_reversal(gate_list):
+def eliminate_time_reversal(gate_iter):
     """
     Eliminate the ones in the reversed order
 
-    :gate_list: list(tuple), the list of gate networks
+    :gate_iter: iterator, the list of gate networks
 
-    return list
+    return iterator
     """
+    #I need to allocate memory :(
+    gate_list = list(gate_iter)
+
     for i, net in enumerate(gate_list):
-        if net[::-1] in gate_list : 
+        rev_net = net[::-1]   #reverse net
+        if rev_net in gate_list : 
             gate_list[i] = False
 
-    #filter out the False nets
-    return [g for g in gate_list if g]
+    for g in gate_list :
+        if g : 
+            yield g
 
 
 
-def eliminate_relabelling(nqubit, gate_list):
+def eliminate_relabelling(nqubit, gate_iter):
     """
     Elimiate the ones which are equivalent by bit-relabelling
     It is equivalent by performing one swap
 
     :nqubit: int, the number of qubits 
-    :gate_list: list(tuple), the list of gate networks
+    :gate_iter: list(tuple), the list of gate networks
 
-    return list(tuple)
+    return iterator
     """
+    #again, allocate memory :(
+    gate_list = list(gate_iter)
+
     #all possible swaps 
     lswaps = combinations(range(nqubit), 2) 
 
@@ -169,19 +184,23 @@ def eliminate_relabelling(nqubit, gate_list):
                 if tuple(net2) in gate_list : 
                     gate_list[i] = False
 
-    #filter out the False nets
-    return [g for g in gate_list if g]
+    for g in gate_list : 
+        if g :
+            yield g
         
         
-def eliminate_conjugation_by_swapping(gate_list):
+def eliminate_conjugation_by_swapping(gate_iter):
     """
     Eliminate conjugation by swapping. Choose the a gates sandwiched by
     identical gates, then swap it.
 
-    :gate_list: list(tuple), the list of gate networks
+    :gate_iter: list(tuple), the list of gate networks
 
     return list(tuple)
     """
+    # again allocation of memory :(
+    gate_list = list(gate_iter)
+
     for i, net in enumerate(gate_list):
         for j, g in enumerate(net[1:-1]) : #inside big sandwich
             mnet = list(net)  #get a mutable object
@@ -194,14 +213,15 @@ def eliminate_conjugation_by_swapping(gate_list):
                 if tuple(mnet) in gate_list : 
                     gate_list[i] = False
 
-    #filter out the False nets
-    return [g for g in gate_list if g]
+    for g in gate_list : 
+        if g :
+            yield g
 
 
 
 ## main function ##
 
-def get_unique_2gates_networks(nqubit, network_length):
+def unique2net(nqubit, net_depth):
     """
     Get a list of unique 2-bit gates network by four eliminations
     The format is binary with LSB convention. 
@@ -215,25 +235,15 @@ def get_unique_2gates_networks(nqubit, network_length):
     :nqubit: int, the number of qubits
     """
     g2 = all_2g(nqubit) #all kind of gates
-
-    L = all_2g_networks(network_length, g2)
-    print(len(L))
+    L = all_2g_networks(net_depth, g2)
     L = eliminate3(L)
-    L = eliminate_relabelling(nqubit, L)
     L = eliminate_time_reversal(L)
-    L = eliminate_conjugation_by_swapping(L)
-    print(len(L))
+    L = eliminate_relabelling(nqubit,L)
 
-    print("second iteration")
+    print(len(list(L)), "from", len(g2)**net_depth)
 
-    L = eliminate3(L)
-    L = eliminate_relabelling(nqubit, L)
-    L = eliminate_time_reversal(L)
-    L = eliminate_conjugation_by_swapping(L)
-    print(len(L))
-
-    
     return L
+    
 
 
 
