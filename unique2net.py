@@ -21,6 +21,7 @@ __email__ = "cicagustiani@gmail.com"
 
 
 from itertools import product, combinations #standard library
+import json
 
 
 
@@ -188,7 +189,7 @@ def eliminate_conjugation_by_swapping(gate_list):
         if net : 
             for j, g in enumerate(net[1:-1]) : #inside big sandwich
                 mnet = list(net)  #get a mutable object
-                g1, g2 = net[j], net[j+2]  #smal#l sandwich g1|g|g2
+                g1, g2 = net[j], net[j+2]  #small sandwich g1|g|g2
                 if g1 == g2 :
                     poss = get_pos_ones(g1)
                     g_swapped = swapbits(*poss, g) 
@@ -213,6 +214,34 @@ def DS_eliminations(nqubit, gate_iter):
     return filter(lambda x: x!=False, gate_list)
 
 
+## formating 
+
+def change_format(g2,nqubit,G):
+    """
+    This function changes the format from binary type to tuple type
+    to the index in combo
+    
+    Eg. If the gate number in binary is 6=110, the tuple comes out as (2,3)
+    (i.e. get_pos_one(6) + 1) which further is changed to the index of that tuple
+    in c i.e 2. 
+    """
+    a=list(range(1,nqubit+1))
+    c=list(combinations(a,2))
+    g2_dict=dict()
+    
+    for i in list(g2):
+        pos_tuple = tuple(x+1 for x in get_pos_ones(i))
+        g2_dict[i]=c.index(pos_tuple)
+        
+    initial_list =list(G)
+    final_list=[]
+    for i in initial_list:
+        new_tuple = tuple(g2_dict[x] for x in tuple(i))
+        final_list.append(new_tuple)
+    
+    return(final_list)
+
+
 
 ## main function ##
 
@@ -235,6 +264,11 @@ def unique2net(nqubit, net_depth):
     g2 = all_2g(nqubit) #all kind of gates
     GL = eliminate3(all_2g_networks(net_depth, g2))
     G = DS_eliminations(nqubit, GL)
+
+    fname='List--%i.txt'%net_depth
+    with open(fname,'w+') as outfile:
+         json.dump(change_format(g2,nqubit,G), outfile, indent=None)
+    
 
     return G
 
