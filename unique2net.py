@@ -210,13 +210,16 @@ def DS_eliminations(nqubit, gate_iter):
 
     :gate_iter: iter(tuple), the list of gate networks
     """
-    gate_list = list(gate_iter)
+    print("start DS elimination")
+    gate_list = [g for g in gate_iter]
     eliminate_time_reversal(gate_list)
+    print("pass time reversal")
     eliminate_relabelling(nqubit, gate_list)
+    print("pass bit relabelling")
     eliminate_conjugation_by_swapping(gate_list)
 
-    for g in gate_list : 
-        if g : yield g
+    return filter(lambda x: x!=False, gate_list)
+
 
 
 ## main function ##
@@ -242,3 +245,8 @@ def unique2net(nqubit, net_depth):
     G = DS_eliminations(nqubit, GL)
 
     return G
+
+
+
+
+
