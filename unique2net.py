@@ -120,7 +120,6 @@ def eliminate3(gate_iter):
     :gate_iter: iterator(tuple), the list of gate networks 
 
     """
-    #track deleted indices
     for net in gate_iter: 
         count, gate = 0, net[0]  
         for g in net : 
@@ -149,7 +148,7 @@ def eliminate_time_reversal(gate_list):
     for i, net in enumerate(gate_list):
         if net : 
             rev_net = net[::-1]   #reverse net
-            if rev_net in gate_list : 
+            if rev_net != net and rev_net in gate_list : 
                 gate_list[i] = False
 
 
@@ -169,12 +168,9 @@ def eliminate_relabelling(nqubit, gate_list):
 
     for swap in lswaps:
         for i, net in enumerate(gate_list):
-            net2 = []   #the swapped net
             if net : 
-                for g in net : #construct the new net 
-                    g2 = swapbits(*swap, g)   
-                    net2 += [g2]
-                if tuple(net2) in gate_list : 
+                net2 = tuple([swapbits(*swap,g) for g in net])
+                if net2!=net and net2 in gate_list : 
                     gate_list[i] = False
 
         
@@ -192,13 +188,13 @@ def eliminate_conjugation_by_swapping(gate_list):
         if net : 
             for j, g in enumerate(net[1:-1]) : #inside big sandwich
                 mnet = list(net)  #get a mutable object
-                g1, g2 = net[j], net[j+2]  #small sandwich g1|g|g2
+                g1, g2 = net[j], net[j+2]  #smal#l sandwich g1|g|g2
                 if g1 == g2 :
                     poss = get_pos_ones(g1)
                     g_swapped = swapbits(*poss, g) 
                     mnet[j+1] = g_swapped
 
-                    if tuple(mnet) in gate_list : 
+                    if tuple(mnet)!= net and tuple(mnet) in gate_list : 
                         gate_list[i] = False
 
 
@@ -207,16 +203,12 @@ def DS_eliminations(nqubit, gate_iter):
     DiVincenzo and Smolin eliminations
     I can't avoid memory allocation since I need a lookup table
 
-
     :gate_iter: iter(tuple), the list of gate networks
     """
-    print("start DS elimination")
     gate_list = [g for g in gate_iter]
-    eliminate_time_reversal(gate_list)
-    print("pass time reversal")
     eliminate_relabelling(nqubit, gate_list)
-    print("pass bit relabelling")
     eliminate_conjugation_by_swapping(gate_list)
+    eliminate_time_reversal(gate_list)
 
     return filter(lambda x: x!=False, gate_list)
 
