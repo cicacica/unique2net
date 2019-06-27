@@ -208,9 +208,9 @@ def DS_eliminations(nqubit, gate_iter):
     gate_list = [g for g in gate_iter]
     eliminate_relabelling(nqubit, gate_list)
     eliminate_conjugation_by_swapping(gate_list)
-    eliminate_time_reversal(gate_list)
+#    eliminate_time_reversal(gate_list)
 
-    return filter(lambda x: x!=False, gate_list)
+#    return filter(lambda x: x!=False, gate_list)
 
 
 
@@ -234,9 +234,9 @@ def unique2net(nqubit, net_depth):
     """
     g2 = all_2g(nqubit) #all kind of gates
     GL = eliminate3(all_2g_networks(net_depth, g2))
-    G = DS_eliminations(nqubit, GL)
+    DS_eliminations(nqubit, GL)
 
-    return G
+    return filter(lambda x: x!=False, GL)
 
 
 
