@@ -1,26 +1,32 @@
 #!/usr/bin/env python3
 
-__doc__=""" unique2net.py: list all unique gates by eliminations
+__doc__=""" unique2net.py: list all unique gates by eliminations from
+DiVincenzo and Smolin (cond-mat/9409111). 
+This version 2 applies different approach. Instead of eliminating the
+equivalent ones, the unique ones are added one by one.
+
+Parallelization is not yet implemented.
+
+
     
-    arXiv ref: cond-mat/9409111.
-
-
-    USAGE: 
+    MAIN USAGE: 
 
         from unique2net import unique2net
 
         unique2net(nqubit, network_length)
+
 """
 __author__ = "Cica Gustiani"
 __license__ = "GPL"
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __maintainer__ = "Cica Gustiani"
 __email__ = "cicagustiani@gmail.com"
 
 
 
-
-from itertools import product, combinations #standard library
+#standard libraries
+from itertools import product, combinations, permutations 
+from time import time
 
 
 
@@ -47,7 +53,11 @@ def swapbits(p1, p2, num):
     :p1:,:p2: int, the swapped position
     :num: int, the number 
 
-    return int
+    return int"
+    Shuffle the binary of num with some permutation 
+
+    :num: int, the number
+    :permutaion: tup
     """
     b1 = getbit(num, p1) 
     b2 = getbit(num, p2) 
@@ -81,6 +91,22 @@ def get_pos_ones(num):
     return tuple(poss)
 
 
+def shuffle_bits(num, permutation):
+    """
+    Shuffle the binary of num with some position permutation  
+
+    :num: int, the number
+    :permutaion: tuple(int), the final permutation
+    """
+    num2 = 0  
+    for i, new_pos in enumerate(permutation):
+        # updating from right to left 0xxx | j000
+        num2 =  num2 | (getbit(num, new_pos) << i)
+
+    return num2
+
+
+
 
 ## listing gates and networks ##
 
@@ -97,124 +123,131 @@ def all_2g(nqubit):
 
 
 
-def all_2g_networks(network_size, gates2):
-    """
-    Return a list composing tuples of all possible 2-bit gates network
-    with size netsize
-
-    :nqubit: int, the number of qubits 
-    :gates2: set, the set 2-qubit gates compsing the network
-
-    return iterator
-    """
-    return product(gates2, repeat=network_size)
-
-
-## eliminations of 2-bit gate networks ##
-
-def eliminate3(gate_iter):
+def net_eliminate3(gate_net):
     """
     Eliminate the networks with > 3 consecutive occurrence of CNOTS. 
     Example: (1,3,3,3,3,1) is eliminated
 
-    :gate_iter: iterator(tuple), the list of gate networks 
+    :gate_net: tuple(int), a configuration of gate network 
 
+    return boolean
     """
-    for net in gate_iter: 
-        count, gate = 0, net[0]  
-        for g in net : 
-            if g == gate : 
-                count += 1
-            else : 
-                gate = g
-                count = 1
+    count, gate_counted = 0, gate_net[0]  
+    for g in gate_net : 
+        if g == gate_counted : 
+            count += 1
+        else : 
+            gate_counted = g
+            count = 1
 
-            if count == 4 : #check >3 conscecutive occurence
-                break
-
-        if count < 4 :
-            yield net
+        if count == 4 : #check >3 conscecutive occurence
+            return False
+    return True
 
 
-
-def eliminate_time_reversal(gate_list):
+def all_2g_networks(net_depth, gates2):
     """
-    Eliminate the ones in the reversed order
+    Return a list composing tuples of all possible 2-bit gates(CPHASEs) network
+    with size netsize. The returned networks has no more than
+    consecutive occurance more than 3 CPHASE.
 
-    :gate_iter: list(tuple|bool), the list of gate networks
+    :net_depth: int, the network depth, basically the number of CPHASE 
+    :gates2: set, the set 2-qubit gates compsing the network
 
-    return iterator
+    return filter
     """
-    for i, net in enumerate(gate_list):
-        if net : 
-            rev_net = net[::-1]   #reverse net
-            if rev_net != net and rev_net in gate_list : 
-                gate_list[i] = False
+    return filter(net_eliminate3, product(gates2, repeat=net_depth))
 
 
+## obtaining equivalent networks network ##
 
-def eliminate_relabelling(nqubit, gate_list):
+
+def equiv_time_reversal(gate_net):
+    """you've been a post for a while 
+    Equivalent network by reversing the gates order, basically U^{\dagger}
+
+    :gate_net: tuple(int), a configuration of gate network 
+
+    return tuple
     """
-    Elimiate the ones which are equivalent by bit-relabelling
-    It is equivalent by performing one swap
+    return gate_net[::-1]   #reverse net
 
-    :nqubit: int, the number of qubits 
-    :gate_list: list(tuple|bool), the list of gate networks
 
-    return iterator
+def equiv_bit_permutations(gate_net):
     """
-    #all possible swaps 
-    lswaps = combinations(range(nqubit), 2) 
+    Equivalent networks by bit-relabelling, basically performing identical swaps in
+    the beginning and the end, equivalent with simple permutation,
+    including identity
 
-    for swap in lswaps:
-        for i, net in enumerate(gate_list):
-            if net : 
-                net2 = tuple([swapbits(*swap,g) for g in net])
-                if net2!=net and net2 in gate_list : 
-                    gate_list[i] = False
+    :gate_net: tuple(int), a configuration of gate network 
+
+    return tuple
+    """
+    return [tuple(shuffle_bits(g, p) for g in gate_net) 
+            for p in permutations(range(len(gate_net)))]
 
         
-        
-def eliminate_conjugation_by_swapping(gate_list):
+def equiv_conjugation_by_swapping(gate_net):
     """
-    Eliminate conjugation by swapping. Choose the a gates sandwiched by
-    identical gates, then swap it.
+    Equivalent network that is equivalent by swapping conjugation.
+    Choose the a gates sandwiched by identical gates, then swap it.
 
-    :gate_list: list(tuple|bool), the list of gate networks
+    :gate_net: tuple(int), a configuration of gate network 
 
     return list(tuple)
     """
-    for i, net in enumerate(gate_list):
-        if net : 
-            for j, g in enumerate(net[1:-1]) : #inside big sandwich
-                mnet = list(net)  #get a mutable object
-                g1, g2 = net[j], net[j+2]  #smal#l sandwich g1|g|g2
-                if g1 == g2 :
-                    poss = get_pos_ones(g1)
-                    g_swapped = swapbits(*poss, g) 
-                    mnet[j+1] = g_swapped
+    result = []
+    for j, g in enumerate(gate_net[1:-1]) : #inside big sandwich
+        mnet = list(gate_net)  #get a mutable object
+        g1, g2 = gate_net[j], gate_net[j+2]  #small sandwich g1|g|g2
+        if g1 == g2 :
+            poss = get_pos_ones(g1)
+            g_swapped = swapbits(*poss, g) 
+            mnet[j+1] = g_swapped
 
-                    if tuple(mnet)!= net and tuple(mnet) in gate_list : 
-                        gate_list[i] = False
+            if tuple(mnet)!= gate_net : 
+                result.append(tuple(mnet))
+
+    return result
 
 
-def DS_eliminations(nqubit, gate_iter):
+def equiv_DS(gate_net):
     """
-    DiVincenzo and Smolin eliminations
-    I can't avoid memory allocation since I need a lookup table
+    Get all equivalent networks based on
+    DiVincenzo and Smolin equivalent networks
 
-    :gate_iter: iter(tuple), the list of gate networks
+    :nqubit: int, the number of qubits used
+    :gate_list: list(tuple|bool), the list of gate networks
     """
-    gate_list = [g for g in gate_iter]
-    eliminate_relabelling(nqubit, gate_list)
-    eliminate_conjugation_by_swapping(gate_list)
-#    eliminate_time_reversal(gate_list)
-
-#    return filter(lambda x: x!=False, gate_list)
+    equivs = set()
+    equivs = equivs.union([equiv_time_reversal(gate_net)])
+    equivs = equivs.union(equiv_conjugation_by_swapping(gate_net))
+    equivs = equivs.union(equiv_bit_permutations(gate_net))
+    
+    return equivs
 
 
 
 ## main function ##
+
+def __compare_net_to_equiv(net, equivalents):
+    """
+    Helper of unique2net function. It compares a network among given a
+    list of equivalent networks. The equivalent networks of net is
+    listed using DiVincenzo - Smolin equivalent
+    criteria 
+
+    :net: tuple(int), a configuration of gate network 
+    :equivalents: list(tuple), a list of gate network 
+
+    return boolean
+    """
+    for n in equiv_DS(net) : 
+        if n in equivalents : 
+            return True
+    return False
+    
+
 
 def unique2net(nqubit, net_depth):
     """
@@ -232,11 +265,22 @@ def unique2net(nqubit, net_depth):
 
     return generator
     """
-    g2 = all_2g(nqubit) #all kind of gates
-    GL = eliminate3(all_2g_networks(net_depth, g2))
-    DS_eliminations(nqubit, GL)
+    unique_net = []
 
-    return filter(lambda x: x!=False, GL)
+    start=time()    
+    for net in all_2g_networks(net_depth, all_2g(nqubit)): 
+        equiv1 = equiv_DS(net)
+        exists = False
+        for unet in unique_net : 
+            if __compare_net_to_equiv(unet, equiv1) : 
+                exists = True
+                break
+        if not exists : 
+            unique_net.append(net)
+
+    print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
+
+    return unique_net
 
 
 
