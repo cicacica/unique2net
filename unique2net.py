@@ -5,7 +5,7 @@ DiVincenzo and Smolin (cond-mat/9409111).
 This version 2 applies different approach. Instead of eliminating the
 equivalent ones, the unique ones are added one by one.
 
-Parallelization is not yet implemented.
+Parallelization is implemented.
 
 
     
@@ -13,12 +13,12 @@ Parallelization is not yet implemented.
 
         from unique2net import unique2net
 
-        unique2net(nqubit, network_length)
+        unique2net(nqubit, network_length, NCPU)
 
 """
 __author__ = "Cica Gustiani"
 __license__ = "GPL"
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __maintainer__ = "Cica Gustiani"
 __email__ = "cicagustiani@gmail.com"
 
@@ -27,8 +27,8 @@ __email__ = "cicagustiani@gmail.com"
 #standard libraries
 from itertools import product, combinations, permutations 
 from time import time
-
-
+from multiprocessing import Process, Event
+from numpy import array_split
 
 
 ## bitwise operations CONVENTION: LSB ##
@@ -250,13 +250,31 @@ def __compare_net_to_equiv(nqubit, net, equivalents):
     return False
     
 
+def __worker_net_checker(nqubit, unet_list, net_test, found_event):
+    """
+    Worker to check if the given gate network is in the list
 
-def unique2net(nqubit, net_depth):
+    :nqubit: int, the number of qubits
+    :unet_list: list(tuple), the list of unique gates that will be compared to
+                the net_test  
+    :net_test: tuple, the tested gate network
+    :found_event: Event, an instantiated object of Event() that will
+                  terminate all other workers
+    """ 
+    net_test_equiv = equiv_DS(nqubit, net_test)
+    for unet in unet_list : 
+        if found_event.is_set():
+            break
+        if __compare_net_to_equiv(nqubit, unet, net_test_equiv) : 
+            found_event.set()
+
+
+
+def unique2net(nqubit, net_depth, NCPU=4):
     """
     Get a list of unique 2-bit gates network by four eliminations
     The format is binary with LSB convention. 
-
-    example: 
+    Example: 
             q0 ----
             q1 ---- 
             q2 ----
@@ -264,20 +282,36 @@ def unique2net(nqubit, net_depth):
 
     :nqubit: int, the number of qubits
     :net_depth: int, the depth of the gate-networks
+    :NCPU: int, the number of cpu in multiprocessing
 
     return generator
     """
-    unique_net = []
-
     start=time()    
+
+    unique_net = []
+    found_event = Event()
+
     for net in all_2g_networks(net_depth, all_2g(nqubit)): 
-        equiv1 = equiv_DS(nqubit, net)
-        exists = False
-        for unet in unique_net : 
-            if __compare_net_to_equiv(nqubit, unet, equiv1) : 
-                exists = True
-                break
-        if not exists : 
+
+        found_event.clear()  #set to not found 
+        unet_idx = array_split(range(len(unique_net)), NCPU) #to split the unique nets wrt indices 
+        proc_num = min(NCPU, len(unique_net))
+
+        if proc_num : 
+            pool = [Process(target=__worker_net_checker, 
+                args=(nqubit, unique_net[unet_idx[i][0]:unet_idx[i][-1]+1], net, found_event)) for i in range(proc_num)]
+
+            #parallel section
+            for procc in pool : 
+                procc.start() #spawn each thread
+            
+            for p in pool: #terminate each thread 
+                p.terminate()
+            for p in pool: #join each thread 
+                p.join()
+            # end of parallel section
+        
+        if not found_event.is_set(): 
             unique_net.append(net)
 
     print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
