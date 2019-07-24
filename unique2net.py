@@ -173,18 +173,19 @@ def equiv_time_reversal(gate_net):
     return gate_net[::-1]   #reverse net
 
 
-def equiv_bit_permutations(gate_net):
+def equiv_bit_permutations(gate_net, nqubits):
     """
     Equivalent networks by bit-relabelling, basically performing identical swaps in
     the beginning and the end, equivalent with simple permutation,
     including identity
 
     :gate_net: tuple(int), a configuration of gate network 
+    :nqubits: int, the number of qubits
 
     return tuple
     """
     return [tuple(shuffle_bits(g, p) for g in gate_net) 
-            for p in permutations(range(len(gate_net)))]
+            for p in permutations(range(nqubits))]
 
         
 def equiv_conjugation_by_swapping(gate_net):
@@ -211,7 +212,7 @@ def equiv_conjugation_by_swapping(gate_net):
     return result
 
 
-def equiv_DS(gate_net):
+def equiv_DS(nqubit, gate_net):
     """
     Get all equivalent networks based on
     DiVincenzo and Smolin equivalent networks
@@ -222,7 +223,7 @@ def equiv_DS(gate_net):
     equivs = set()
     equivs = equivs.union([equiv_time_reversal(gate_net)])
     equivs = equivs.union(equiv_conjugation_by_swapping(gate_net))
-    equivs = equivs.union(equiv_bit_permutations(gate_net))
+    equivs = equivs.union(equiv_bit_permutations(gate_net, nqubit))
     
     return equivs
 
@@ -230,19 +231,20 @@ def equiv_DS(gate_net):
 
 ## main function ##
 
-def __compare_net_to_equiv(net, equivalents):
+def __compare_net_to_equiv(nqubit, net, equivalents):
     """
     Helper of unique2net function. It compares a network among given a
     list of equivalent networks. The equivalent networks of net is
     listed using DiVincenzo - Smolin equivalent
     criteria 
 
+    :nqubit: int, the number of qubits used
     :net: tuple(int), a configuration of gate network 
     :equivalents: list(tuple), a list of gate network 
 
     return boolean
     """
-    for n in equiv_DS(net) : 
+    for n in equiv_DS(nqubit, net) : 
         if n in equivalents : 
             return True
     return False
@@ -269,10 +271,10 @@ def unique2net(nqubit, net_depth):
 
     start=time()    
     for net in all_2g_networks(net_depth, all_2g(nqubit)): 
-        equiv1 = equiv_DS(net)
+        equiv1 = equiv_DS(nqubit, net)
         exists = False
         for unet in unique_net : 
-            if __compare_net_to_equiv(unet, equiv1) : 
+            if __compare_net_to_equiv(nqubit, unet, equiv1) : 
                 exists = True
                 break
         if not exists : 
