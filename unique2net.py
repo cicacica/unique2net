@@ -27,7 +27,7 @@ __email__ = "cicagustiani@gmail.com"
 #standard libraries
 from itertools import product, combinations, permutations 
 from time import time
-from multiprocessing import Process, Event
+from multiprocessing import Process, Event, Lock
 from numpy import array_split
 
 
@@ -250,7 +250,7 @@ def __compare_net_to_equiv(nqubit, net, equivalents):
     return False
     
 
-def __worker_net_checker(nqubit, unet_list, net_test, found_event):
+def __worker_net_checker(nqubit, unet_list, net_test, found_event, lock):
     """
     Worker to check if the given gate network is in the list
 
@@ -266,8 +266,12 @@ def __worker_net_checker(nqubit, unet_list, net_test, found_event):
         if found_event.is_set():
             break
         if __compare_net_to_equiv(nqubit, unet, net_test_equiv) : 
-            found_event.set()
-
+            lock.acquire()
+            try:
+                found_event.set()
+            finally:
+                lock.release()
+            break
 
 
 def unique2net(nqubit, net_depth, NCPU=4):
@@ -298,18 +302,18 @@ def unique2net(nqubit, net_depth, NCPU=4):
         proc_num = min(NCPU, len(unique_net))
 
         if proc_num : 
+            lock = Lock()
             pool = [Process(target=__worker_net_checker, 
-                args=(nqubit, unique_net[unet_idx[i][0]:unet_idx[i][-1]+1], net, found_event)) for i in range(proc_num)]
+                args=(nqubit,
+                    unique_net[unet_idx[i][0]:unet_idx[i][-1]+1], net,
+                    found_event,lock)) for i in range(proc_num)]
 
-            #parallel section
+            ## parallel section
             for procc in pool : 
                 procc.start() #spawn each thread
-            
-            for p in pool: #terminate each thread 
-                p.terminate()
             for p in pool: #join each thread 
                 p.join()
-            # end of parallel section
+            ## end of parallel section
         
         if not found_event.is_set(): 
             unique_net.append(net)
