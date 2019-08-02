@@ -214,7 +214,7 @@ def equiv_conjugation_by_swapping(gate_net):
 
 def equiv_DS(nqubit, gate_net):
     """
-    Get all equivalent networks based on
+    Get a set of all equivalent networks based on
     DiVincenzo and Smolin equivalent networks
 
     :nqubit: int, the number of qubits used
@@ -258,26 +258,6 @@ def change_format(g2,nqubit,G):
 
 
 ## main function ##
-
-def __compare_net_to_equiv(nqubit, net, equivalents):
-    """
-    Helper of unique2net function. It compares a network among given a
-    list of equivalent networks. The equivalent networks of net is
-    listed using DiVincenzo - Smolin equivalent
-    criteria 
-
-    :nqubit: int, the number of qubits used
-    :net: tuple(int), a configuration of gate network 
-    :equivalents: list(tuple), a list of gate network 
-
-    return boolean
-    """
-    for n in equiv_DS(nqubit, net) : 
-        if n in equivalents : 
-            return True
-    return False
-    
-
 def __worker_net_checker(nqubit, unet_list, net_test, found_event, lock):
     """
     Worker to check if the given gate network is in the list
@@ -293,7 +273,7 @@ def __worker_net_checker(nqubit, unet_list, net_test, found_event, lock):
     for unet in unet_list : 
         if found_event.is_set():
             break
-        if __compare_net_to_equiv(nqubit, unet, net_test_equiv) : 
+        if equiv_DS(nqubit, unet).intersection(net_test_equiv) : #if equivalent
             lock.acquire()
             try:
                 found_event.set()
