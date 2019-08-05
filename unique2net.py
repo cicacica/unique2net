@@ -27,7 +27,7 @@ __email__ = "cicagustiani@gmail.com"
 #standard libraries
 from itertools import product, combinations, permutations 
 from time import time
-from multiprocessing import Process, Event, Lock
+from multiprocessing import Process, Value
 from numpy import array_split
 
 
@@ -230,7 +230,7 @@ def equiv_DS(nqubit, gate_net):
 
 
 ## main function ##
-def __worker_net_checker(nqubit, unet_list, net_test, found_event, lock):
+def __worker_net_checker(nqubit, unet_list, net_test, found):
     """
     Worker to check if the given gate network is in the list
 
@@ -238,19 +238,16 @@ def __worker_net_checker(nqubit, unet_list, net_test, found_event, lock):
     :unet_list: list(tuple), the list of unique gates that will be compared to
                 the net_test  
     :net_test: tuple, the tested gate network
-    :found_event: Event, an instantiated object of Event() that will
-                  terminate all other workers
+    :found: multiprocessing.Value ctype int, the value  to track if the equivalent
+            network is found
     """ 
     net_test_equiv = equiv_DS(nqubit, net_test)
     for unet in unet_list : 
-        if found_event.is_set():
+        if found.value:
             break
         if equiv_DS(nqubit, unet).intersection(net_test_equiv) : #if equivalent
-            lock.acquire()
-            try:
-                found_event.set()
-            finally:
-                lock.release()
+            with found.get_lock():
+                found.value += 1
             break
 
 
@@ -273,20 +270,19 @@ def unique2net(nqubit, net_depth, NCPU=4):
     start=time()    
 
     unique_net = []
-    found_event = Event()
 
     for net in all_2g_networks(net_depth, all_2g(nqubit)): 
 
-        found_event.clear()  #set to not found 
         unet_idx = array_split(range(len(unique_net)), NCPU) #to split the unique nets wrt indices 
         proc_num = min(NCPU, len(unique_net))
 
+        found = Value('i', 0)
         if proc_num : 
-            lock = Lock()
+            found.value = 0
             pool = [Process(target=__worker_net_checker, 
                 args=(nqubit,
                     unique_net[unet_idx[i][0]:unet_idx[i][-1]+1], net,
-                    found_event,lock)) for i in range(proc_num)]
+                    found)) for i in range(proc_num)]
 
             ## parallel section
             for procc in pool : 
@@ -295,7 +291,7 @@ def unique2net(nqubit, net_depth, NCPU=4):
                 p.join()
             ## end of parallel section
         
-        if not found_event.is_set(): 
+        if not found.value: 
             unique_net.append(net)
 
     print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
