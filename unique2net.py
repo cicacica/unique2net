@@ -163,7 +163,7 @@ def all_2g_networks(net_depth, gates2):
 
 
 def equiv_time_reversal(gate_net):
-    """you've been a post for a while 
+    """
     Equivalent network by reversing the gates order, basically U^{\dagger}
 
     :gate_net: tuple(int), a configuration of gate network 
@@ -221,7 +221,7 @@ def equiv_DS(nqubit, gate_net):
     :gate_list: list(tuple|bool), the list of gate networks
     """
     equivs = set()
-    equivs = equivs.union([equiv_time_reversal(gate_net)])
+    #equivs = equivs.union([equiv_time_reversal(gate_net)])
     equivs = equivs.union(equiv_conjugation_by_swapping(gate_net))
     equivs = equivs.union(equiv_bit_permutations(gate_net, nqubit))
     
