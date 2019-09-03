@@ -221,7 +221,7 @@ def equiv_DS(nqubit, gate_net):
     :gate_list: list(tuple|bool), the list of gate networks
     """
     equivs = set()
-    equivs = equivs.union([equiv_time_reversal(gate_net)])
+    #equivs = equivs.union([equiv_time_reversal(gate_net)])
     equivs = equivs.union(equiv_conjugation_by_swapping(gate_net))
     equivs = equivs.union(equiv_bit_permutations(gate_net, nqubit))
     
