@@ -112,57 +112,6 @@ def shuffle_bits(num, permutation):
 
 
 
-## listing gates and networks ##
-
-def all_2g(nqubit):
-    """
-    Return a set of all possible 2-qubit gates of nqubits qubits. Those
-    will be a set of integers composing the network gates
-
-    :nqubit: int, the number of qubits 
-
-    return set
-    """
-    return set([a for a in range(2**nqubit) if bin(a).count('1')==2])
-
-
-
-def net_eliminate3(gate_net):
-    """
-    Eliminate the networks with > 3 consecutive occurrence of CNOTS. 
-    Example: (1,3,3,3,3,1) is eliminated
-
-    :gate_net: tuple(int), a configuration of gate network 
-
-    return boolean
-    """
-    count, gate_counted = 0, gate_net[0]  
-    for g in gate_net : 
-        if g == gate_counted : 
-            count += 1
-        else : 
-            gate_counted = g
-            count = 1
-
-        if count == 4 : #check >3 conscecutive occurence
-            return False
-    return True
-
-
-def all_2g_networks(net_depth, gates2):
-    """
-    Return a list composing tuples of all possible 2-bit gates(CPHASEs) network
-    with size netsize. The returned networks has no more than
-    consecutive occurance more than 3 CPHASE.
-
-    :net_depth: int, the network depth, basically the number of CPHASE 
-    :gates2: set, the set 2-qubit gates compsing the network
-
-    return filter
-    """
-    return filter(net_eliminate3, product(gates2, repeat=net_depth))
-
-
 ## obtaining equivalent networks ##
 
 def equiv_time_reversal(gate_net):
@@ -242,73 +191,9 @@ def equiv_DS(nqubit, gate_net, **kwargs):
     return equivs
 
 
-## elimination2-related methods
-def __worker_net_checker(nqubit, unet_list, net_test, found):
-    """
-    Worker to check if the given gate network is in the list
-
-    :nqubit: int, the number of qubits
-    :unet_list: list(tuple), the list of unique gates that will be compared to
-                the net_test  
-    :net_test: tuple, the tested gate network
-    :found: multiprocessing.Value ctype int, the value  to track if the equivalent
-            network is found
-    """ 
-    net_test_equiv = equiv_DS(nqubit, net_test)
-    for unet in unet_list : 
-        if found.value:
-            break
-        if equiv_DS(nqubit, unet).intersection(net_test_equiv) : #if equivalent
-            with found.get_lock():
-                found.value += 1
-            break
-
-
-
-def elimination_methode2(nqubit, net_depth, NCPU=4):
-    """
-    Get a list of unique 2-bit gates network by four eliminations
-    The format is binary with LSB convention. 
-    Example: 
-            q0 ----
-            q1 ---- 
-            q2 ----
-    gate (q0,q1)=3, (q0,q2)=5, (q1,q2)=6 
-
-    :nqubit: int, the number of qubits
-    :net_depth: int, the depth of the gate-networks
-    :NCPU: int, the number of cpu in multiprocessing
-
-    return list
-    """
-    unique_net = []
-    for net in all_2g_networks(net_depth, all_2g(nqubit)): 
-
-        unet_idx = array_split(range(len(unique_net)), NCPU) #to split the unique nets wrt indices 
-        proc_num = min(NCPU, len(unique_net))
-
-        found = Value('i', 0)
-        if proc_num : 
-            found.value = 0
-            pool = [Process(target=__worker_net_checker, 
-                args=(nqubit,
-                    unique_net[unet_idx[i][0]:unet_idx[i][-1]+1], net,
-                    found)) for i in range(proc_num)]
-
-            ## parallel section
-            for procc in pool : 
-                procc.start() #spawn each thread
-            for p in pool: #join each thread 
-                p.join()
-            ## end of parallel section
-        
-        if not found.value: 
-            unique_net.append(net)
-    return unique_net
 
 
 ## graphs-related methods
-
 def __is_isomorphic_to(G_test, G_list):
     """
     Check if G_test is isomorphic to one of the graph in G_list
@@ -406,9 +291,12 @@ def list_non_iso_graphs(nqubit, net_depth, **kwargs):
 
 
 
-def list_unique_net_with_graph(nqubit, net_depth, **kwargs):
+def unique2net(nqubit, net_depth, **kwargs):
     """
-    Get a list of 2-bit gates network using graph isomorphism
+    Get a list of 2-bit gates networks. The unique gates are iterated by the following steps:
+        1) iterate the non-isomorphic graph (this step doesn't implement parallelism)
+        2) place edge ordering from 1). At this step, the relabelling qubit has already implemented.
+        3) apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping 
 
     param
         :nqubit: int, the number of qubits
@@ -419,43 +307,34 @@ def list_unique_net_with_graph(nqubit, net_depth, **kwargs):
         :draw_graphs: boolean=True, to draw the produced graphs
         :save_edges: boolean=True, save graph as a collection of edges
         :dirpath: str=out-[n]qubit-depth[d], directory path to store outputs
+
+    return:
+        a list of 2-bit networks gates, with the LSB convention. For example:
+    Example: network (3,5) is 
+            q0 -o-o--
+                | |
+            q1 -o-|--
+                  |  
+            q2 ---o--
+    where (q0,q1)=3, (q0,q2)=5
     """
     #optional arguments
-    opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,i
+    opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
             'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth)}
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
 
+    
+    start=time()    
+
     # get a list of non-isomorphic graphs with net_depth edges 
     LNIG = list_non_iso_graphs(nqubit, net_depth, **kwargs)
 
+    # apply ordering 
+
+
+
          
 
-
-
-
-def unique2net(nqubit, net_depth, methode=graph_methode, methode_kwargs=dict()):
-    """
-    Get a list of unique 2-bit gates network by four eliminations
-    The format is binary with LSB convention. 
-    Example: 
-            q0 ----
-            q1 ---- 
-            q2 ----
-    gate (q0,q1)=3, (q0,q2)=5, (q1,q2)=6 
-
-    :nqubit: int, the number of qubits
-    :net_depth: int, the depth of the gate-networks
-    :methode: function, the method to do find the unique networks
-    :method_kwargs: dict, additional arguments for the methode
-
-    return list
-    """
-    start=time()    
-    unique_net = methode(nqubit, net_depth)
-
-    print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
-
-
-
+    #print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
 
