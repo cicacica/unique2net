@@ -29,10 +29,14 @@ from itertools import product, combinations, permutations
 from time import time
 from multiprocessing import Process, Value
 from numpy import array_split
+from subprocess import run 
+
+import pygraphviz as pgv
+import networkx as nx
+import json
 
 
 ## bitwise operations CONVENTION: LSB ##
-
 def getbit(num, k):
     """
     get the k-th bit of num, where num has length nqubit
@@ -279,7 +283,8 @@ def __worker_net_checker(nqubit, unet_list, net_test, found):
             break
 
 
-def unique2net(nqubit, net_depth, NCPU=4):
+
+def elimination_methode2():
     """
     Get a list of unique 2-bit gates network by four eliminations
     The format is binary with LSB convention. 
@@ -293,12 +298,9 @@ def unique2net(nqubit, net_depth, NCPU=4):
     :net_depth: int, the depth of the gate-networks
     :NCPU: int, the number of cpu in multiprocessing
 
-    return generator
+    return list
     """
-    start=time()    
-
     unique_net = []
-
     for net in all_2g_networks(net_depth, all_2g(nqubit)): 
 
         unet_idx = array_split(range(len(unique_net)), NCPU) #to split the unique nets wrt indices 
@@ -322,10 +324,95 @@ def unique2net(nqubit, net_depth, NCPU=4):
         if not found.value: 
             unique_net.append(net)
 
-    print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
 
     return unique_net
 
+
+def is_isomorphic_to(G_test, G_list):
+    """
+    Check if G_test is isomorphic to one of the graph in G_list
+
+    :G_test: nx.graph, the graph to be tested
+    :G_list: list(nx.graph), the list of graph to be compared to
+    """
+    for G in G_list : 
+        if nx.is_isomorphic(G,G_test):
+            return True
+    return False
+
+
+
+def ListNonIsoGraphs(nqubit, net_depth, *path_dict):
+    """
+    List the non-isomorphic graphs
+
+    :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+    :path_dict: str, path that store a list of non-isographic graphs 
+    """
+    cphases = list(combinations(range(nqubit),2)) 
+
+    #Non-Isomorphic graphs
+    GNIsom = dict()
+    GNIsom[0]=[nx.MultiGraph()]
+    GNIsom[0][0].add_nodes_from(range(nqubit))
+    GNIsom[1]=[nx.MultiGraph()]
+    GNIsom[1][0].add_edge(*cphases[0])
+
+    for depth in range(2, net_depth+1):
+        GNIsom[depth]=list()
+        for G_old in GNIsom[depth-1]:
+            for cphase in cphases : 
+                G_cand = G_old.copy() 
+                G_cand.add_edge(*cphase)
+                if not is_isomorphic_to(G_cand, GNIsom[depth]):
+                    GNIsom[depth].append(G_cand)
+    return GNIsom[net_depth]
+
+
+
+
+def graph_methode(nqubit, net_depth):
+    """
+    Get a list of 2-bit gates network using graph isomorphism
+
+    :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+    """
+    outpath='out-%iqubit-depth%i'%(nqubit,net_depth)
+    run(['mkdir','-p',outpath])
+    LNIG = ListNonIsoGraphs(nqubit, net_depth)
+
+    for i,G in enumerate(LNIG) : 
+        GV=pgv.AGraph(directed=False, strict=False)
+        GV.add_edges_from(list(G.edges()))
+        GV.layout()
+        GV.draw('%s/graph%i.png'%(outpath,i))
+         
+
+
+
+
+def unique2net(nqubit, net_depth, methode=graph_methode):
+    """
+    Get a list of unique 2-bit gates network by four eliminations
+    The format is binary with LSB convention. 
+    Example: 
+            q0 ----
+            q1 ---- 
+            q2 ----
+    gate (q0,q1)=3, (q0,q2)=5, (q1,q2)=6 
+
+    :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+    :methode: function, the method to do find the unique networks
+    :method_kwargs: dict, arguments for the methode
+
+    return list
+    """
+    start=time()    
+    unique_net = methode(nqubit, net_depth)
+    #print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
 
 
 
