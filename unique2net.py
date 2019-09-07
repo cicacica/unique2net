@@ -4,9 +4,11 @@ __doc__=""" unique2net.py: list all unique gates criteria of
 DiVincenzo and Smolin (cond-mat/9409111). 
 
 The unique gates are iterated by the following steps:
-    1) iterate the non-isomorphic graph (this step doesn't implement parallelism)
+    1) iterate the non-isomorphic graph 
     2) place edge ordering from 1). At this step, the relabelling qubit has already implemented.
     3) apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping 
+
+no parallellization
 
 
 MAIN USAGE: 
@@ -113,10 +115,8 @@ def shuffle_bits(num, permutation):
 
 
 ## obtaining equivalent networks ##
-
 def equiv_time_reversal(gate_net):
-    """you've been a post for a while 
-    Equivalent network by reversing the gates order, basically U^{\dagger}
+    """Equivalent network by reversing the gates order, basically U^{\dagger}
 
     :gate_net: tuple(int), a configuration of gate network 
 
@@ -136,8 +136,8 @@ def equiv_bit_permutations(gate_net, nqubits):
 
     return tuple
     """
-    return [tuple(shuffle_bits(g, p) for g in gate_net) 
-            for p in permutations(range(nqubits))]
+    return set([tuple(shuffle_bits(g, p) for g in gate_net) 
+            for p in permutations(range(nqubits))])
 
         
 def equiv_conjugation_by_swapping(gate_net):
@@ -147,7 +147,7 @@ def equiv_conjugation_by_swapping(gate_net):
 
     :gate_net: tuple(int), a configuration of gate network 
 
-    return list(tuple)
+    return set(tuple)
     """
     result = []
     for j, g in enumerate(gate_net[1:-1]) : #inside big sandwich
@@ -159,38 +159,49 @@ def equiv_conjugation_by_swapping(gate_net):
             mnet[j+1] = g_swapped
 
             if tuple(mnet)!= gate_net : 
-                result.append(tuple(mnet))
+                result += [tuple(mnet)]
 
-    return result
+    return set(result)
 
 
-def equiv_DS(nqubit, gate_net, **kwargs):
+def nets_with_ds_equivalents(nets, nqubit,**kwargs):
     """
-    Get a set of all equivalent networks based on
-    DiVincenzo and Smolin equivalent networks
+    convert a list of networks into a list of classes of equivalent networks.
 
-    :nqubit: int, the number of qubits used
-    :gate_list: list(tuple|bool), the list of gate networks
-
-    kwargs arguments : 
-        :time_reversal:boolean=False
-        :bit_permutations:boolean=True
-        :conjugation_by_swap:boolean=True
+    :nets: list(tuple), the list of networks
+    :nqubit:int, the number of nqubits
+    kwargs
+        :ds_bit_permutation:boolean=False, include bit permutation criteria 
+        :ds_time_reversal:boolean=False, include time reversal criteria
+        :ds_conjugation_by_swap:boolean=True, include conjugation by swapping criteria
     """
-    opt={'time_reversal':False, 'bit_permutations':True, 'conjugation_by_swap':True} 
+    opt = {'ds_bit_permutation': False, 'ds_conjugation_by_swap':True, 'ds_time_reversal': False }
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
-    equivs = set()
-    if opt['time_reversal']:
-        equivs = equivs.union([equiv_time_reversal(gate_net)])
-    if opt['bit_permutations']:
-        equivs = equivs.union(equiv_conjugation_by_swapping(gate_net))
-    if opt['conjugation_by_swap']:
-        equivs = equivs.union(equiv_bit_permutations(gate_net, nqubit))
-    
-    return equivs
 
-
+    nets_equivs=list()
+    if opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit)]
+    elif not opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net)]
+    elif not opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_time_reversal(net)]
+    elif opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_conjugation_by_swapping(net))]
+    elif opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_time_reversal(net))]
+    elif opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_conjugation_by_swapping(net))]
+    elif not opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net).union(equiv_time_reversal(net))]
+    elif opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_time_reversal(net))]
+    elif not opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+        for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net).union(equiv_time_reversal(net))]
+    else :
+        for net in nets : nets_equivs += [equiv_bit_permutations(net,nqubit).union(quiv_conjugation_by_swapping(net)).union(
+                                        equiv_time_reversal(net))]
+    return nets_equivs
 
 
 ## graphs-related methods
@@ -223,7 +234,7 @@ def __more_three_multiedges(G):
 
 def list_non_iso_graphs(nqubit, net_depth, **kwargs):
     """
-    List the non-isomorphic graphs, where no more that three edges between two nodes.
+    List the non-isomorphic graphs or edges, where no more that three edges between two nodes.
 
     :nqubit: int, the number of qubits
     :net_depth: int, the depth of the gate-networks
@@ -237,7 +248,7 @@ def list_non_iso_graphs(nqubit, net_depth, **kwargs):
 
     """
     #optional arguments
-    opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,i
+    opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
             'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth)}
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
@@ -250,13 +261,15 @@ def list_non_iso_graphs(nqubit, net_depth, **kwargs):
         with open(opt['path_json']) as iff :
             list_edges = json.load(iff)
         start_depth = len(list_edges[0])+1
+
+        if start_depth > net_depth : 
+            return list_edges #nothing to do here  
+
         GNIsom[start_depth-1] = [nx.MultiGraph(edges) for edges in list_edges]
         print("iteration starts from %i edges..."%(start_depth-1))
+
     else : 
-        GNIsom[0]=[nx.MultiGraph()]i
-        GNIsom[0][0].add_nodes_from(range(nqubit))
-        GNIsom[1]=[nx.MultiGraph()]
-        GNIsom[1][0].add_edge(*cphases[0])
+        GNIsom[1]=[nx.MultiGraph([cphases[0]])]
         start_depth = 2
         print("iteration starts from 1 edge...")
 
@@ -291,12 +304,59 @@ def list_non_iso_graphs(nqubit, net_depth, **kwargs):
 
 
 
+# listing nets related methods
+def __edges_to_net(edges):
+    """
+    convert edges of a graph to a bit network with an arbitrary 2-bit gates ordering
+
+    :edges: list(tuple), the list of edges
+    """
+    return tuple([2**a+2**b for a,b in edges])
+    
+
+def __net_to_graph(network, graph_type='graphviz'):
+    """
+    convert a network into a graph
+    
+    :network:tuple, the 2-qubit network gates with lsb convention
+    :graph_type:str, 'graphviz' or 'multigraph'
+    """
+    if graph_type[0] == 'm':
+        return nx.MultiGraph([get_pos_ones(gate) for gate in network]) 
+    else : 
+        G = pgv.AGraph(directed=False, strict=False)
+        G.add_edges_from([get_pos_ones(gate) for gate in network]) 
+        return G
+
+
+def __graphs_to_nets(graph_list, edges = False):
+    """
+    Return a list of network from each graph by applying all possible ordering 
+
+    :graph_list:list(nx.MultiGraph) the list of graphs
+    :edges:boolean=False, identifies if the list comprises only edges
+    """
+    GL = []
+
+    if edges == True : 
+        for E in graph_list: 
+            net = __edges_to_net(E)
+            GL += list(set(permutations(net)))
+    else : 
+        for G in graph_list: 
+            net = __edges_to_net(G.edges())
+            GL += list(set(permutations(net)))
+
+    return GL
+
+
+
 def unique2net(nqubit, net_depth, **kwargs):
     """
     Get a list of 2-bit gates networks. The unique gates are iterated by the following steps:
         1) iterate the non-isomorphic graph (this step doesn't implement parallelism)
         2) place edge ordering from 1). At this step, the relabelling qubit has already implemented.
-        3) apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping 
+        3) apply more criteria of DiVincenzo and Smolin: time reversal and conjugation by swapping 
 
     param
         :nqubit: int, the number of qubits
@@ -307,6 +367,9 @@ def unique2net(nqubit, net_depth, **kwargs):
         :draw_graphs: boolean=True, to draw the produced graphs
         :save_edges: boolean=True, save graph as a collection of edges
         :dirpath: str=out-[n]qubit-depth[d], directory path to store outputs
+        :ds_bit_permutation:boolean=False, include bit permutation criteria 
+        :ds_time_reversal:boolean=False, include time reversal criteria
+        :ds_conjugation_by_swap:boolean=True, include conjugation by swapping criteria
 
     return:
         a list of 2-bit networks gates, with the LSB convention. For example:
@@ -320,21 +383,35 @@ def unique2net(nqubit, net_depth, **kwargs):
     """
     #optional arguments
     opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
-            'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth)}
+            'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth),
+            'ds_bit_permutation': True, 'ds_conjugation_by_swap':True,
+            'ds_time_reversal': False }
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
 
-    
     start=time()    
 
     # get a list of non-isomorphic graphs with net_depth edges 
-    LNIG = list_non_iso_graphs(nqubit, net_depth, **kwargs)
+    list_niso_kwargs = {k: opt[k] for k in ['path_json','draw_graphs','dirpath']} 
+    LNIG = list_non_iso_graphs(nqubit, net_depth, **list_niso_kwargs)
 
     # apply ordering 
+    LNets = __graphs_to_nets(LNIG, type(LNIG[0]==list))
+
+    # get nets with it's equivalents
+    ds_kwargs = {k:opt[k] for k in ['ds_bit_permutation','ds_time_reversal','ds_conjugation_by_swap']}
+    net_w_equiv = nets_with_ds_equivalents(LNets, nqubit,**ds_kwargs)
+    
+    for i, s_equiv in enumerate(net_w_equiv) : 
+        if len(s_equiv): 
+            for k,net in enumerate(LNets) :  
+                if i!=k and net in s_equiv : 
+                    LNets[i]=False
+                    break
+    unique_net = [net for net in LNets if net]
+    print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
+
+    return unique_net
 
 
-
-         
-
-    #print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
 
