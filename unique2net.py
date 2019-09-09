@@ -129,7 +129,7 @@ def equiv_bit_permutations(gate_net, nqubits):
     """
     Equivalent networks by bit-relabelling, basically performing identical swaps in
     the beginning and the end, equivalent with simple permutation,
-    including identity
+    excluding identity
 
     :gate_net: tuple(int), a configuration of gate network 
     :nqubits: int, the number of qubits
@@ -137,7 +137,7 @@ def equiv_bit_permutations(gate_net, nqubits):
     return tuple
     """
     return set([tuple(shuffle_bits(g, p) for g in gate_net) 
-            for p in permutations(range(nqubits))])
+        for p in permutations(range(nqubits)).__next__()[1:]])
 
         
 def equiv_conjugation_by_swapping(gate_net):
@@ -178,25 +178,26 @@ def nets_with_ds_equivalents(nets, nqubit,**kwargs):
     opt = {'ds_bit_permutation': False, 'ds_conjugation_by_swap':True, 'ds_time_reversal': False }
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
+    p, c, t = opt['ds_bit_permutation'], opt['ds_conjugation_by_swap'], opt['ds_time_reversal']
 
     nets_equivs=list()
-    if opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+    if p and not c and not t:
         for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit)]
-    elif not opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+    elif not p and c and not t:
         for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net)]
-    elif not opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+    elif not p and not c and t:
         for net in nets: nets_equivs += [equiv_time_reversal(net)]
-    elif opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+    elif p and c and not t:
         for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_conjugation_by_swapping(net))]
-    elif opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+    elif p and not c and t:
         for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_time_reversal(net))]
-    elif opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and not opt['ds_time_reversal']:
+    elif p and c and not t:
         for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_conjugation_by_swapping(net))]
-    elif not opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+    elif not p and c and t:
         for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net).union(equiv_time_reversal(net))]
-    elif opt['ds_bit_permutation'] and not opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+    elif p and not c and t:
         for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_time_reversal(net))]
-    elif not opt['ds_bit_permutation'] and opt['ds_conjugation_by_swap'] and opt['ds_time_reversal']:
+    elif not p and c and t:
         for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net).union(equiv_time_reversal(net))]
     else :
         for net in nets : nets_equivs += [equiv_bit_permutations(net,nqubit).union(quiv_conjugation_by_swapping(net)).union(
@@ -230,6 +231,26 @@ def __more_three_multiedges(G):
             return True
     
     return False
+
+
+def __draw_a_graph(G, outpath='out.png', nodes=False):
+    """ Draw a graph
+
+    :G:list(edges) or networkx.MultiGraph or pygraphviy.AGraph
+    :outpath:str, the output path
+    :nodes:list(int), list of nodes. If it is present, then those nosed will be
+           drawn regardless the absence of edges
+    """
+    GV = pgv.AGraph(directed=False, strict=False)
+    if isinstance(G, list):
+        GV.add_edges_from(G)
+    else:
+        GV.add_edges_from(list(G.edges()))
+
+    if nodes : 
+        GV.add_nodes_from(nodes)
+    GV.layout()
+    GV.draw(outpath)
 
 
 def list_non_iso_graphs(nqubit, net_depth, **kwargs):
@@ -294,11 +315,7 @@ def list_non_iso_graphs(nqubit, net_depth, **kwargs):
 
     if opt['draw_graphs']:
         for i,G in enumerate(LNIG) : 
-            GV=pgv.AGraph(directed=False, strict=False)
-            GV.add_nodes_from(range(nqubit))
-            GV.add_edges_from(list(G.edges()))
-            GV.layout()
-            GV.draw('%s/graph%i.png'%(opt['dirpath'],i))
+            __draw_a_graph(G, '%s/graph%i.png'%(opt['dirpath'],i))
 
     return LNIG
 
@@ -384,7 +401,7 @@ def unique2net(nqubit, net_depth, **kwargs):
     #optional arguments
     opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
             'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth),
-            'ds_bit_permutation': True, 'ds_conjugation_by_swap':True,
+            'ds_bit_permutation': False, 'ds_conjugation_by_swap':True,
             'ds_time_reversal': False }
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
@@ -402,6 +419,8 @@ def unique2net(nqubit, net_depth, **kwargs):
     ds_kwargs = {k:opt[k] for k in ['ds_bit_permutation','ds_time_reversal','ds_conjugation_by_swap']}
     net_w_equiv = nets_with_ds_equivalents(LNets, nqubit,**ds_kwargs)
     
+    print(net_w_equiv)
+    
     for i, s_equiv in enumerate(net_w_equiv) : 
         if len(s_equiv): 
             for k,net in enumerate(LNets) :  
@@ -409,9 +428,13 @@ def unique2net(nqubit, net_depth, **kwargs):
                     LNets[i]=False
                     break
     unique_net = [net for net in LNets if net]
+    
+    for i,net in enumerate(unique_net):
+        __draw_a_graph(__net_to_graph(net),outpath='observation/final/f%i.png'%i)
+        
     print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
 
-    return unique_net
+    return unique_net,net_w_equiv
 
 
 
