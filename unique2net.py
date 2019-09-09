@@ -31,11 +31,16 @@ from itertools import product, combinations, permutations
 from time import time
 from multiprocessing import Process, Value
 from numpy import array_split
+from math import ceil
 from subprocess import run 
+from glob import glob
+from multiprocessing import Pool
+
 
 import pygraphviz as pgv
 import networkx as nx
 import json
+import re
 
 
 ## bitwise operations CONVENTION: LSB ##
@@ -125,19 +130,20 @@ def equiv_time_reversal(gate_net):
     return gate_net[::-1]   #reverse net
 
 
-def equiv_bit_permutations(gate_net, nqubits):
+def equiv_bit_permutations(gate_net, nqubit):
     """
     Equivalent networks by bit-relabelling, basically performing identical swaps in
     the beginning and the end, equivalent with simple permutation,
     excluding identity
 
     :gate_net: tuple(int), a configuration of gate network 
-    :nqubits: int, the number of qubits
+    :nqubit: int, the number of qubits
 
     return tuple
     """
-    return set([tuple(shuffle_bits(g, p) for g in gate_net) 
-        for p in permutations(range(nqubits)).__next__()[1:]])
+    result = set([tuple(shuffle_bits(g, p) for g in gate_net) for p in permutations(range(nqubit))])
+    result.remove(gate_net) #remove the identity element
+    return result
 
         
 def equiv_conjugation_by_swapping(gate_net):
@@ -164,45 +170,30 @@ def equiv_conjugation_by_swapping(gate_net):
     return set(result)
 
 
-def nets_with_ds_equivalents(nets, nqubit,**kwargs):
+def equiv_set_net(net, nqubit,**kwargs):
     """
-    convert a list of networks into a list of classes of equivalent networks.
+    Get an equivalent set of a network given a network by DS criteria. 
 
-    :nets: list(tuple), the list of networks
-    :nqubit:int, the number of nqubits
-    kwargs
-        :ds_bit_permutation:boolean=False, include bit permutation criteria 
-        :ds_time_reversal:boolean=False, include time reversal criteria
+    :net:tuple(int), the gate network
+    :nqubit:int, number of qubits
+
+    kwargs : 
+        :ds_bit_permutation:boolean=True, include bit permutation criteria 
         :ds_conjugation_by_swap:boolean=True, include conjugation by swapping criteria
+        :ds_time_reversal:boolean=True, include time reversal criteria
+        :identity:boolean=True, identity is included if True
     """
-    opt = {'ds_bit_permutation': False, 'ds_conjugation_by_swap':True, 'ds_time_reversal': False }
+    #optional arguments
+    opt = {'ds_bit_permutation':True, 'ds_conjugation_by_swap':True, 'ds_time_reversal':True, 'identity':True}
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
-    p, c, t = opt['ds_bit_permutation'], opt['ds_conjugation_by_swap'], opt['ds_time_reversal']
 
-    nets_equivs=list()
-    if p and not c and not t:
-        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit)]
-    elif not p and c and not t:
-        for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net)]
-    elif not p and not c and t:
-        for net in nets: nets_equivs += [equiv_time_reversal(net)]
-    elif p and c and not t:
-        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_conjugation_by_swapping(net))]
-    elif p and not c and t:
-        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_time_reversal(net))]
-    elif p and c and not t:
-        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_conjugation_by_swapping(net))]
-    elif not p and c and t:
-        for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net).union(equiv_time_reversal(net))]
-    elif p and not c and t:
-        for net in nets: nets_equivs += [equiv_bit_permutations(net,nqubit).union(equiv_time_reversal(net))]
-    elif not p and c and t:
-        for net in nets: nets_equivs += [equiv_conjugation_by_swapping(net).union(equiv_time_reversal(net))]
-    else :
-        for net in nets : nets_equivs += [equiv_bit_permutations(net,nqubit).union(quiv_conjugation_by_swapping(net)).union(
-                                        equiv_time_reversal(net))]
-    return nets_equivs
+    S_equiv = [net] if opt['identity'] else []
+    if opt['ds_bit_permutation'] : S_equiv += [*equiv_bit_permutations(net, nqubit)]
+    if opt['ds_conjugation_by_swap']: S_equiv += [*equiv_conjugation_by_swapping(net)]
+    if opt['ds_time_reversal']: S_equiv += [*equiv_time_reversal(net)]
+    
+    return {*S_equiv}
 
 
 ## graphs-related methods
@@ -231,6 +222,7 @@ def __more_three_multiedges(G):
             return True
     
     return False
+
 
 
 def __draw_a_graph(G, outpath='out.png', nodes=False):
@@ -348,7 +340,7 @@ def __net_to_graph(network, graph_type='graphviz'):
 
 def __graphs_to_nets(graph_list, edges = False):
     """
-    Return a list of network from each graph by applying all possible ordering 
+    Return a set of network from each graph by applying all possible ordering 
 
     :graph_list:list(nx.MultiGraph) the list of graphs
     :edges:boolean=False, identifies if the list comprises only edges
@@ -358,14 +350,112 @@ def __graphs_to_nets(graph_list, edges = False):
     if edges == True : 
         for E in graph_list: 
             net = __edges_to_net(E)
-            GL += list(set(permutations(net)))
+            GL += permutations(net)
     else : 
         for G in graph_list: 
             net = __edges_to_net(G.edges())
-            GL += list(set(permutations(net)))
+            GL += permutations(net)
 
-    return GL
+    return set(GL)
 
+
+def __iseqiv_occurrence(net):
+    """ Check if the there is more than 3 consecutive identical gates
+
+    :net:tuple(int), the 2-bit gates network 
+    """
+    count, gate = 0, net[0]  
+    for g in net : 
+        if g == gate : 
+            count += 1
+        else : 
+            count, gate = 1, g
+
+        if count == 4 : #check >3 conscecutive occurence
+            return True
+
+    return False
+
+
+def draw_equiv_graphs(net, nqubit, criteria ,images_per_row=4, dirpath='out'):
+    """
+    Get a pciture comprises a set of equivalent networks by a criteria of DS 
+
+    :net:tuple(int), the network
+    :nqubit:int, the number of qubits
+    :criteria: 'permutation_bit' | 'conjugation_by_swapping' | 'time_reversal'
+    :images_per_row:int, the number of graph displayed per row
+    :outpath:str, the path for the output
+    """
+    if criteria[0] == 'p':
+        equivs, idf = equiv_bit_permutations(net, nqubit), 'equiv_perm'
+    elif criteria[0] == 'c':
+        equivs, idf = equiv_conjugation_by_swapping(net), 'equiv_conj'
+    else:
+        equivs, idf = {equiv_time_reversal(net)}, 'equiv_trev'
+    
+    netidf = re.sub('\ |\(|\)','',str(net))#network identifier
+    netidf = re.sub(',','-',netidf)
+
+    run(['mkdir','-p','%s/%s/%s'%(dirpath, idf, netidf)])
+
+    __draw_a_graph(__net_to_graph(net), '%s/%s/%s/00.png'%(dirpath,idf,netidf), range(nqubit))
+    for i, n in enumerate(equivs):
+        __draw_a_graph(__net_to_graph(n), '%s/%s/%s/%i.png'%(dirpath,idf,netidf,i), range(nqubit))
+
+    # combine graphs per row, then combine all rows
+    fnames = array_split(glob('%s/%s/%s/*.png'%(dirpath,idf,netidf)),max(ceil(len(equivs)/images_per_row),1))
+    for i,row in enumerate(fnames):
+        run(['convert', *list(row), '+append', '-border','20','%s/%s/%s/row%i.png'%(dirpath,idf,netidf,i)])
+
+    # combine all graph and remove the image per graph 
+    run(['convert', *glob('%s/%s/%s/row*.png'%(dirpath,idf,netidf)),'-append','-border','20','%s/%s/%s.png'%(dirpath,idf,netidf)])
+    run(['rm', '-r',  '%s/%s/%s'%(dirpath,idf,netidf)])
+
+
+
+
+def __worker_draw_equivs(net, nqubit, dirpath, images_per_row):
+    """
+    worker that draw equivalent nodes based on criterias DS: bit permutation and conjugation by swapping 
+
+    :net:tuple(int), the network
+    :nqubit:int, the number of qubit
+    :outpath:str, the path directory
+    :images_per_row:int, the number of graph displayed per row
+    """
+    run(['mkdir','-p',dirpath])
+    draw_equiv_graphs(net,nqubit, 'p' ,images_per_row=images_per_row, dirpath=dirpath)
+    draw_equiv_graphs(net,nqubit, 'c' ,images_per_row=images_per_row, dirpath=dirpath)
+    draw_equiv_graphs(net,nqubit, 't' ,images_per_row=images_per_row, dirpath=dirpath)
+
+
+
+def __worker_draw_equiv_mapper(args):
+    """ multi-arguments helper for __worker_draw_equivs
+    """
+    return __worker_draw_equivs(*args)
+
+
+
+def test_draw_by_equivalents(nqubit, net_depth, ncpu=4, images_per_row=4, dirpath='out'): 
+    """
+    Test function: draw graph by grouping its equivalents. Each folder contains
+    equivalent graphs grouped by DS equivalents
+
+    :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+    :ncpu:int, number of cpu for parallelization
+    :images_per_row:int, the number of graphs drawn per row
+    :dirpath:str="out", output path 
+    """
+    run(['mkdir','-p',dirpath]) 
+    cphases = [i for i in range(2**nqubit) if bin(i).count('1')==2]
+    Lstart = [net for net in product(cphases, repeat=net_depth) if not __iseqiv_occurrence(net)]
+    Largs = [(net, nqubit, dirpath ,images_per_row) for net in Lstart]
+    P = Pool(ncpu)
+    P.map(__worker_draw_equiv_mapper, Largs)
+                
 
 
 def unique2net(nqubit, net_depth, **kwargs):
@@ -419,8 +509,6 @@ def unique2net(nqubit, net_depth, **kwargs):
     ds_kwargs = {k:opt[k] for k in ['ds_bit_permutation','ds_time_reversal','ds_conjugation_by_swap']}
     net_w_equiv = nets_with_ds_equivalents(LNets, nqubit,**ds_kwargs)
     
-    print(net_w_equiv)
-    
     for i, s_equiv in enumerate(net_w_equiv) : 
         if len(s_equiv): 
             for k,net in enumerate(LNets) :  
@@ -435,6 +523,4 @@ def unique2net(nqubit, net_depth, **kwargs):
     print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
 
     return unique_net,net_w_equiv
-
-
 
