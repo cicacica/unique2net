@@ -282,9 +282,12 @@ def __graph_to_nets_uperm(net, nqubit):
     n = len(GL)
     for i in range(n): 
         for j in range(i+1,n):
-            cap = equiv_bit_permutations(GL[i], nqubit).intersection(equiv_bit_permutations(GL[j],nqubit))
-            if len(cap)>0:
+            equiv_i = equiv_bit_permutations(GL[i],nqubit)
+            equiv_j = equiv_bit_permutations(GL[j],nqubit)
+            cap = equiv_i.intersection(equiv_j)
+            if len(cap):
                 GL[i] = False
+                break
     return filter(lambda x: x, GL)
 
 
@@ -300,7 +303,6 @@ def __graphs_to_nets(graph_list, nqubit, edges = False, time_reversal=False):
     :time_reversal:boolean=False, to include time reversal
     """
     GL = []
-
     if edges == True : 
         for E in graph_list: 
             net = __edges_to_net(E)
@@ -308,9 +310,8 @@ def __graphs_to_nets(graph_list, nqubit, edges = False, time_reversal=False):
     else : 
         for G in graph_list: 
             net = __edges_to_net(G.edges())
-            GL += permutations(net, nqubit)
+            GL +=__graph_to_nets_uperm(net, nqubit)
     GLS = {*GL}
-
     if time_reversal : 
         GLS.remove(equiv_time_reversal(net))
 
