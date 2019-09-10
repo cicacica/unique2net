@@ -40,6 +40,6 @@ if __name__ == "__main__" :
 
     nqubit, net_depth = int(sys.argv[1]),int(sys.argv[2])
     test_draw_by_equivalents(nqubit, net_depth, ncpu=16, images_per_row=8,
-            dirpath='out-%i-%i'%(nqubit,net_depth)): 
+            dirpath='out-%i-%i'%(nqubit,net_depth)) 
     
 
