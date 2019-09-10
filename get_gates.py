@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from unique2net import unique2net
+from unique2net import unique2net, get_pos_ones
 import json
 import sys
 from subprocess import run 
-
+from itertools import combinations
 
 
 
@@ -41,10 +41,10 @@ if __name__ == "__main__" :
     """
 
     nqubit, net_depth = int(sys.argv[1]),int(sys.argv[2])
-    dirpath = 'out-%iq-%il'%(nqubit, net_depth)
+    dirpath = 'out-%iq-%id'%(nqubit, net_depth)
     run(['mkdir', '-p', dirpath])
 
-    L = unique2net(nqubit, net_depth,dirpath=dirpath) 
+    L = unique2net(nqubit, net_depth,dirpath=dirpath, draw_graphs=False) 
     g2 = [i for i in range(2**nqubit) if bin(i).count('1')==2]
 
     with open(dirpath+'/nets.json','+w') as  off : 
