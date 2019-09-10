@@ -197,7 +197,7 @@ def equiv_set_net(net, nqubit,**kwargs):
     return {*S_equiv}
 
 
-## graphs-related methods
+## graphs-related helpers
 def __is_isomorphic_to(G_test, G_list):
     """
     Check if G_test is isomorphic to one of the graph in G_list
@@ -246,75 +246,6 @@ def __draw_a_graph(G, outpath='out.png', nodes=False):
     GV.draw(outpath)
 
 
-def list_non_iso_graphs(nqubit, net_depth, **kwargs):
-    """
-    List the non-isomorphic graphs or edges, where no more that three edges between two nodes.
-
-    :nqubit: int, the number of qubits
-    :net_depth: int, the depth of the gate-networks
-
-    kwargs
-        :path_json: str, path that store a list of edges of non-isomorphic graphs in json
-                    format. If this file presents, the iteration of generating new graphs will be started there.
-        :draw_graphs: boolean=True, to draw the produced graphs
-        :save_edges: boolean=True, save graph as a collection of edges
-        :dirpath: str=out-[n]qubit-depth[d], directory path to store outputs
-
-    """
-    #optional arguments
-    opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
-            'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth)}
-    for key in opt: 
-        if key in kwargs : opt[key]=kwargs[key]
-
-    cphases = list(combinations(range(nqubit),2)) 
-    GNIsom = dict() #Non-Isomorphic graphs
-
-    # loading stuff
-    if opt['path_json'] : 
-        with open(opt['path_json']) as iff :
-            list_edges = json.load(iff)
-        start_depth = len(list_edges[0])+1
-
-        if start_depth > net_depth : 
-            return list_edges #nothing to do here  
-
-        GNIsom[start_depth-1] = [nx.MultiGraph(edges) for edges in list_edges]
-        print("iteration starts from %i edges..."%(start_depth-1))
-
-    else : 
-        GNIsom[1]=[nx.MultiGraph([cphases[0]])]
-        start_depth = 2
-        print("iteration starts from 1 edge...")
-
-    # the main part --- iteration of finding non-isomporphic graphs starts here
-    for depth in range(start_depth, net_depth+1):
-        GNIsom[depth]=list()
-        for G_old in GNIsom[depth-1]:
-            for cphase in cphases : 
-                G_cand = G_old.copy() 
-                G_cand.add_edge(*cphase)
-                if not __more_three_multiedges(G_cand): 
-                    if not __is_isomorphic_to(G_cand, GNIsom[depth]):
-                        GNIsom[depth].append(G_cand)
-
-    # storing stuff 
-    LNIG = GNIsom[depth]
-    if opt['draw_graphs']+opt['save_edges']: run(['mkdir','-p',opt['dirpath']])
-
-    if opt['save_edges'] : 
-        with open(opt['dirpath']+'/edges.json','w') as ouf : 
-            json.dump([list(G.edges()) for G in LNIG],ouf)
-
-    if opt['draw_graphs']:
-        for i,G in enumerate(LNIG) : 
-            __draw_a_graph(G, '%s/graph%i.png'%(opt['dirpath'],i))
-
-    return LNIG
-
-
-
-# listing nets related methods
 def __edges_to_net(edges):
     """
     convert edges of a graph to a bit network with an arbitrary 2-bit gates ordering
@@ -339,25 +270,51 @@ def __net_to_graph(network, graph_type='graphviz'):
         return G
 
 
-def __graphs_to_nets(graph_list, edges = False):
+
+def __graph_to_nets_uperm(net, nqubit):
+    """
+    Return a list of networks from graph up to bit permutation
+
+    :net:tuple(int), the network configuration
+    :nqubit:int, the number of qubits
+    """
+    GL = list(permutations(net))
+    n = len(GL)
+    for i in range(n): 
+        for j in range(i+1,n):
+            cap = equiv_bit_permutations(GL[i], nqubit).intersection(equiv_bit_permutations(GL[j],nqubit))
+            if len(cap)>0:
+                GL[i] = False
+    return filter(lambda x: x, GL)
+
+
+
+
+def __graphs_to_nets(graph_list, nqubit, edges = False, time_reversal=False):
     """
     Return a set of network from each graph by applying all possible ordering 
 
     :graph_list:list(nx.MultiGraph) the list of graphs
+    :nqubit:int, the number of qubit
     :edges:boolean=False, identifies if the list comprises only edges
+    :time_reversal:boolean=False, to include time reversal
     """
     GL = []
 
     if edges == True : 
         for E in graph_list: 
             net = __edges_to_net(E)
-            GL += permutations(net)
+            GL += __graph_to_nets_uperm(net,nqubit)
     else : 
         for G in graph_list: 
             net = __edges_to_net(G.edges())
-            GL += permutations(net)
+            GL += permutations(net, nqubit)
+    GLS = {*GL}
 
-    return set(GL)
+    if time_reversal : 
+        GLS.remove(equiv_time_reversal(net))
+
+    return GLS
 
 
 def __iseqiv_occurrence(net):
@@ -439,6 +396,8 @@ def __worker_draw_equiv_mapper(args):
 
 
 
+### test methods
+
 def test_draw_by_equivalents(nqubit, net_depth, ncpu=4, images_per_row=4, dirpath='out'): 
     """
     Test function: draw graph by grouping its equivalents. Each folder contains
@@ -457,6 +416,95 @@ def test_draw_by_equivalents(nqubit, net_depth, ncpu=4, images_per_row=4, dirpat
     P = Pool(ncpu)
     P.map(__worker_draw_equiv_mapper, Largs)
                 
+
+
+def is_equiv_iso_conj(net, non_iso_graphs):
+    """
+    Tell if a network is equivalent by criteria "conjugation by swapping" using graph isomorphism.
+
+    :net:tuple(int), the network
+    :non_iso_graphs:iterative(networkx.MultiGraph), a list of non isomorphic graphs
+    """
+    G_test, answers = __net_to_graph(net, 'multigraph'), 0
+
+    for G in non_iso_graphs:
+        answers += nx.is_isomorphic(G,G_test) 
+        if answers > 2 : return True
+
+    if answers > 2: 
+        return True
+    else : 
+        return False
+
+
+
+### main methods
+
+def list_non_iso_graphs(nqubit, net_depth, **kwargs):
+    """
+    List the non-isomorphic graphs or edges, where no more that three edges between two nodes.
+
+    :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+
+    kwargs
+        :path_json: str, path that store a list of edges of non-isomorphic graphs in json
+                    format. If this file presents, the iteration of generating new graphs will be started there.
+        :draw_graphs: boolean=True, to draw the produced graphs
+        :save_edges: boolean=True, save graph as a collection of edges
+        :dirpath: str=out-[n]qubit-depth[d], directory path to store outputs
+
+    """
+    #optional arguments
+    opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
+            'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth)}
+    for key in opt: 
+        if key in kwargs : opt[key]=kwargs[key]
+
+    cphases = list(combinations(range(nqubit),2)) 
+    GNIsom = dict() #Non-Isomorphic graphs
+
+    # loading stuff
+    if opt['path_json'] : 
+        with open(opt['path_json']) as iff :
+            list_edges = json.load(iff)
+        start_depth = len(list_edges[0])+1
+
+        if start_depth > net_depth : 
+            return list_edges #nothing to do here  
+
+        GNIsom[start_depth-1] = [nx.MultiGraph(edges) for edges in list_edges]
+        print("iteration starts from %i edges..."%(start_depth-1))
+
+    else : 
+        GNIsom[1]=[nx.MultiGraph([cphases[0]])]
+        start_depth = 2
+        print("iteration starts from 1 edge...")
+
+    # the main part --- iteration of finding non-isomporphic graphs starts here
+    for depth in range(start_depth, net_depth+1):
+        GNIsom[depth]=list()
+        for G_old in GNIsom[depth-1]:
+            for cphase in cphases : 
+                G_cand = G_old.copy() 
+                G_cand.add_edge(*cphase)
+                if not __more_three_multiedges(G_cand): 
+                    if not __is_isomorphic_to(G_cand, GNIsom[depth]):
+                        GNIsom[depth].append(G_cand)
+
+    # storing stuff 
+    LNIG = GNIsom[depth]
+    if opt['draw_graphs']+opt['save_edges']: run(['mkdir','-p',opt['dirpath']])
+
+    if opt['save_edges'] : 
+        with open(opt['dirpath']+'/edges.json','w') as ouf : 
+            json.dump([list(G.edges()) for G in LNIG],ouf)
+
+    if opt['draw_graphs']:
+        for i,G in enumerate(LNIG) : 
+            __draw_a_graph(G, '%s/graph%i.png'%(opt['dirpath'],i))
+
+    return LNIG
 
 
 def unique2net(nqubit, net_depth, **kwargs):
@@ -503,25 +551,25 @@ def unique2net(nqubit, net_depth, **kwargs):
     list_niso_kwargs = {k: opt[k] for k in ['path_json','draw_graphs','dirpath']} 
     LNIG = list_non_iso_graphs(nqubit, net_depth, **list_niso_kwargs)
 
-    # apply ordering 
-    LNets = __graphs_to_nets(LNIG, type(LNIG[0]==list))
+    # apply ordering, we obtain unique networks up to permutation 
+    LNets = __graphs_to_nets(LNIG, nqubit, type(LNIG[0]==list))
 
-    # get nets with it's equivalents
-    ds_kwargs = {k:opt[k] for k in ['ds_bit_permutation','ds_time_reversal','ds_conjugation_by_swap']}
-    net_w_equiv = nets_with_ds_equivalents(LNets, nqubit,**ds_kwargs)
-    
-    for i, s_equiv in enumerate(net_w_equiv) : 
-        if len(s_equiv): 
-            for k,net in enumerate(LNets) :  
-                if i!=k and net in s_equiv : 
-                    LNets[i]=False
-                    break
-    unique_net = [net for net in LNets if net]
-    
-    for i,net in enumerate(unique_net):
-        __draw_a_graph(__net_to_graph(net),outpath='observation/final/f%i.png'%i)
-        
-    print("%i unique network search is obtained within %f seconds"%(len(unique_net),time()-start))
+    #networks that have equivalence by conjugation by swapping 
+    nets_conj = dict()  
+    for i,net in enumerate(LNets):
+        netsc = equiv_conjugation_by_swapping(net)
+        if len(netsc) > 0 : nets_conj[i] = netsc
 
-    return unique_net,net_w_equiv
+    # obtain unique networks up to permutation and conjugation by swap
+    for i,nets in nets_conj.items():     
+        for net in nets: 
+            if is_equiv_iso_conj(net, LNIG):
+                LNets[i] = False
+                
+    LNets=[net for net in LNets if net]                
+    print("%i unique network search is obtained within %f seconds"%(len(LNets),time()-start))
+
+    return LNets
+
+
 
