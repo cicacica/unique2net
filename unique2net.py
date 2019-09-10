@@ -20,7 +20,7 @@ MAIN USAGE:
 """
 __author__ = "Cica Gustiani"
 __license__ = "GPL"
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 __maintainer__ = "Cica Gustiani"
 __email__ = "cicagustiani@gmail.com"
 
