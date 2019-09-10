@@ -4,7 +4,7 @@ __doc__=""" unique2net.py: list all unique gates criteria of
 DiVincenzo and Smolin (cond-mat/9409111). 
 
 The unique gates are iterated by the following steps:
-    1) iterate the non-isomorphic graph 
+    1) iterate the non-isomorphic graph (non-parallell)
     2) place edge ordering from 1). At this step, the relabelling qubit has already implemented.
     3) apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping 
 
@@ -20,7 +20,7 @@ MAIN USAGE:
 """
 __author__ = "Cica Gustiani"
 __license__ = "GPL"
-__version__ = "3.0.2"
+__version__ = "3.1.2"
 __maintainer__ = "Cica Gustiani"
 __email__ = "cicagustiani@gmail.com"
 
@@ -34,7 +34,7 @@ from numpy import array_split
 from math import ceil
 from subprocess import run 
 from glob import glob
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 
 
 import pygraphviz as pgv
@@ -271,13 +271,16 @@ def __net_to_graph(network, graph_type='graphviz'):
 
 
 
-def __graph_to_nets_uperm(net, nqubit):
+def __edges_to_nets_uperm(G, nqubit):
     """
     Return a list of networks from graph up to bit permutation
 
+    :G: networkx.graph or just the edges
+    :edges:boolean=False, identifies if the list comprises only edges
     :net:tuple(int), the network configuration
     :nqubit:int, the number of qubits
     """
+    net = __edges_to_net(G) 
     GL = list(permutations(net))
     n = len(GL)
     for i in range(n): 
@@ -288,7 +291,7 @@ def __graph_to_nets_uperm(net, nqubit):
             if len(cap):
                 GL[i] = False
                 break
-    return filter(lambda x: x, GL)
+    return [G for G in GL if G]
 
 
 
@@ -304,13 +307,12 @@ def __graphs_to_nets(graph_list, nqubit, edges = False, time_reversal=False):
     """
     GL = []
     if edges == True : 
-        for E in graph_list: 
             net = __edges_to_net(E)
-            GL += __graph_to_nets_uperm(net,nqubit)
+            GL += __edges_to_nets_uperm(net,nqubit)
     else : 
         for G in graph_list: 
             net = __edges_to_net(G.edges())
-            GL +=__graph_to_nets_uperm(net, nqubit)
+            GL +=__edges_to_nets_uperm(net, nqubit)
     GLS = {*GL}
     if time_reversal : 
         GLS.remove(equiv_time_reversal(net))
@@ -508,6 +510,48 @@ def list_non_iso_graphs(nqubit, net_depth, **kwargs):
     return LNIG
 
 
+def __helper_edges_to_nets_uperm(args):
+    return __edges_to_nets_uperm(*args)
+
+def __release_list(L):
+    del L[:]
+    del L
+
+def __net_equiv_conj(net, i):
+    """networks that have equivalence by conjugation by swapping 
+    :net: tuple, the network gates
+    :i:int, the identifier
+
+    return dict {index, set_of_equivalent_nets}
+    """
+    nets_conj = dict()  
+    netsc = equiv_conjugation_by_swapping(net)
+    if len(netsc) > 0 : 
+        nets_conj[i] = netsc
+        return nets_conj
+    else : return False
+
+def __helper_net_equiv_conj(args):
+    return __net_equiv_conj(*args)
+
+
+def __toel_conj(conj_dnets, LNIG):
+    """ to eliminate ones that are equivalent by conjugation by swap
+
+    :conj_equiv_nets: equivalent networks
+    :LNIG:list of non isomorphic graphs
+    """
+    nets = list(conj_dnets.values())[0]
+    for net in nets: 
+        if is_equiv_iso_conj(net, LNIG):
+            return list(conj_dnets.keys())[0]
+    return False
+
+
+def __helper_toel_conj(args):
+    return __toel_conj(*args)
+
+
 def unique2net(nqubit, net_depth, **kwargs):
     """
     Get a list of 2-bit gates networks. The unique gates are iterated by the following steps:
@@ -523,6 +567,7 @@ def unique2net(nqubit, net_depth, **kwargs):
                     format. If this file presents, the iteration of generating new graphs will be started there.
         :draw_graphs: boolean=True, to draw the produced graphs
         :save_edges: boolean=True, save graph as a collection of edges
+        :ncpu:int=cpu_count, the number of cpu in parallelization 
         :dirpath: str=out-[n]qubit-depth[d], directory path to store outputs
         :ds_bit_permutation:boolean=False, include bit permutation criteria 
         :ds_time_reversal:boolean=False, include time reversal criteria
@@ -542,7 +587,7 @@ def unique2net(nqubit, net_depth, **kwargs):
     opt = {'path_json': False, 'draw_graphs': True, 'save_edges': True,
             'dirpath':'out-'+str(nqubit)+'qubit-depth'+str(net_depth),
             'ds_bit_permutation': False, 'ds_conjugation_by_swap':True,
-            'ds_time_reversal': False }
+            'ds_time_reversal': False, 'ncpu':cpu_count() }
     for key in opt: 
         if key in kwargs : opt[key]=kwargs[key]
 
@@ -553,24 +598,28 @@ def unique2net(nqubit, net_depth, **kwargs):
     LNIG = list_non_iso_graphs(nqubit, net_depth, **list_niso_kwargs)
 
     # apply ordering, we obtain unique networks up to permutation 
-    LNets = __graphs_to_nets(LNIG, nqubit, type(LNIG[0]==list))
+    P = Pool(opt['ncpu'])
+    LNets = P.map(__helper_edges_to_nets_uperm,[(G.edges(), nqubit) for G in LNIG])
+    Nets = [] #flattened
+    for N in LNets : Nets.extend(N)
+    __release_list(LNets)
 
-    #networks that have equivalence by conjugation by swapping 
-    nets_conj = dict()  
-    for i,net in enumerate(LNets):
-        netsc = equiv_conjugation_by_swapping(net)
-        if len(netsc) > 0 : nets_conj[i] = netsc
+    #get ones that have equivalences in conjugation by swap
+    P = Pool(opt['ncpu'])
+    nets_conj = P.map(__helper_net_equiv_conj,[(net,i) for i,net in enumerate(Nets)] ) 
+    nets_conj = filter(lambda x:x, nets_conj)
 
-    # obtain unique networks up to permutation and conjugation by swap
-    for i,nets in nets_conj.items():     
-        for net in nets: 
-            if is_equiv_iso_conj(net, LNIG):
-                LNets[i] = False
+    #then, eliminate
+    P = Pool(opt['ncpu'])
+    toel = P.map(__helper_toel_conj, [(dnet, LNIG) for dnet in nets_conj])
+
+    for i in toel : 
+        if i : Nets[i] = False
                 
-    LNets=[net for net in LNets if net]                
-    print("%i unique network search is obtained within %f seconds"%(len(LNets),time()-start))
+    Nets=[net for net in Nets if net]                
+    print("%i unique network search is obtained within %f seconds"%(len(Nets),time()-start))
 
-    return LNets
+    return Nets
 
 
 
