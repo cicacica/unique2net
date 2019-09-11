@@ -8,7 +8,7 @@ The unique gates are iterated by the following steps:
     2) place edge ordering from 1). At this step, the relabelling qubit has already implemented.
     3) apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping 
 
-no parallellization
+
 
 
 MAIN USAGE: 
