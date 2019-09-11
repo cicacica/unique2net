@@ -1,6 +1,7 @@
 # unique2net
 
-A module to list all unique 2-bit gate networks using the criteria of DiVincenzo and Smolin in reference arXiv:cond-mat/9409111. 
+A module to list all unique 2-bit gate networks using the criteria of DiVincenzo and Smolin in 
+reference [Results on two-bit gate design for quantum computers](https://arxiv.org/abs/cond-mat/9409111). 
 
 The unique gates are iterated by the following steps:
 
