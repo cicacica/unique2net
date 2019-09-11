@@ -21,3 +21,11 @@ from unique2net import unique2net
 
 L = unique2net(number_of_qubits, depth_of_networks)
 ```
+
+### With default setting
+```sh
+unique2net(nqubit, net_depth, path_json=False, draw_graphs=True, save_edges=True,
+            dirpath=[out-number_of_qubits]qubit-depth[depth_of_networks],
+            ds_bit_permutation=False, ds_conjugation_by_swap=True,
+            ds_time_reversal= False, ncpu=cpu_count())
+```
