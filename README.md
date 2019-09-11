@@ -15,17 +15,23 @@ The unique gates are iterated by the following steps:
     Apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping. 
 
 
-### Usage
+### Get a list of 2-bit gates network
 ```sh
 from unique2net import unique2net
 
 L = unique2net(number_of_qubits, depth_of_networks)
 ```
 
-### With default setting
+#### With default setting
 ```sh
 unique2net(nqubit, net_depth, path_json=False, draw_graphs=True, save_edges=True,
             dirpath=[out-number_of_qubits]qubit-depth[depth_of_networks],
             ds_bit_permutation=False, ds_conjugation_by_swap=True,
             ds_time_reversal= False, ncpu=cpu_count())
 ```
+
+### Draw the graphs based on equivalence classes defined in DS paper
+```sh
+test_draw_by_equivalents(number_of_qubits,depth_of_networks,ncpu=4,images_per_row=4,dirpath='out')
+```
+the result for 4 qubits with depth 4 is shown in the folder example
