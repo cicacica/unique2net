@@ -47,7 +47,9 @@ class GraphQNet:
     """
 
     def __init__(self, nqubit, netgates):
-        """ Instantiation
+        """ Instantiation of the GraphQNet object. That is the object contains
+        a 2-bit gates network and can has some graph representation.
+
         :nqubit: int, the number of qubits.
         :netgates: tuple(int), the gate network
         """
@@ -85,7 +87,7 @@ class GraphQNet:
         """
         wedges = [(*e, i) for i,e in enumerate(self.net_to_edges(self.netgates))]
         self.graph = nx.MultiGraph()
-        self.graph.add_weighted_edges_from(wedges, wieght='ordering')
+        self.graph.add_weighted_edges_from(wedges, weight='ordering')
         self.graph.add_nodes_from(range(self.nqubit))
 
 
@@ -152,16 +154,15 @@ class GraphQNet:
         gv.draw('%s/%s'%(self.outdir, outfile))
 
 
-    def is_isomorphic_to(self, graph_list):
-        """
-        Check if G_test is isomorphic to one of the graph in G_list
+    @staticmethod
+    def __compare_edges(G1, G2):
+        return G1[0]['ordering'] == G2[0]['ordering']
 
-        :graph_list: list(nx.graph), the list of graph to be compared with
+    def is_isomorphic_to(self, GQN):
         """
-        for graph in graph_list :
-            if nx.is_isomorphic(self.graph,graph):
-                return True
-        return False
+        Check if G_test is isomorphic to another GraphQNet instance
+        """
+        return nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
 
 
     @staticmethod
@@ -198,8 +199,6 @@ class GraphQNet:
         # combine all graph and remove the image per graph
         run(['convert', *glob('%s/row*.png'%outdir),'-append','-border','20',outfile])
         run(['rm', '-r', outdir])
-
-
 
 
 class bitop:
