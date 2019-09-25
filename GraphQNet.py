@@ -55,7 +55,9 @@ class GraphQNet:
         self.netgates = netgates
         self.outdir = False
         self.graph = False
+
         #set some stuff
+        self.set_out_dir()
         self.set_graph()
 
 
@@ -93,7 +95,7 @@ class GraphQNet:
 
         :outdir: str, the output directory
         """
-        self.outdir = outdir[0] if outdir else '%s/out'%os.getcwd()
+        self.outdir = outdir[0] if outdir else os.getcwd()
         run(['mkdir', '-p', self.outdir])
 
 
