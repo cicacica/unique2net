@@ -28,7 +28,7 @@ from multiprocessing import Pool, cpu_count
 from glob import glob
 from numpy import array_split
 from math import ceil, log10
-from itertools import combinations
+from itertools import combinations, groupby
 from more_itertools import consecutive_groups
 
 
@@ -64,6 +64,8 @@ class GraphQNet:
         self.set_out_dir()
         self.set_graph()
 
+    def __copy__(self):
+        return GraphQNet(self.nqubit, self.netgates)
 
     @staticmethod
     def edges_to_net(edges):
@@ -92,12 +94,21 @@ class GraphQNet:
         return [bitop.pos_of_ones(gate) for gate in netgates]
 
 
+    def set_netgates(self, new_netgates):
+        """ Renew the netgates attribute
+        """
+        self.netgates = new_netgates
+        self.depth = len(new_netgates)
+        self.set_graph()
+
     def set_graph(self):
         """ Set self.graph
         """
         wedges = [(*e, i) for i,e in enumerate(self.net_to_edges(self.netgates))]
         self.graph = nx.MultiGraph()
         self.graph.add_weighted_edges_from(wedges, weight='ordering')
+        if len(self.graph.node()) > self.nqubit :
+            raise ValueError('Hi there, you need at least %i qubits --- or nodes'%len(self.graph.nodes()))
         self.graph.add_nodes_from(range(self.nqubit))
 
 
@@ -114,55 +125,55 @@ class GraphQNet:
     def more_three_con_edges(self):
         """ Tells if the network has more than three consecutive edges
         """
-        for edge in combinations(range(self.nqubit), 2):
-            edge_data = self.graph.get_edge_data(*edge)
-            if edge_data :
-                orders = sorted([x['ordering'] for x in edge_data.values()])
-                len_edges = [len(list((gr))) for gr in consecutive_groups(orders)]
-                if 4 in len_edges :
-                    return True
+        for key, l in groupby(self.netgates):
+            if len(list(l)) > 3 :
+                return True
         return False
 
-    def equivby_time_reversal(self):
+    def conjugation_by_swap(self):
+        """ Return a set of networks, the equivalent networks by swap conjugation, if there is any.
         """
-        Return it's time-reversal equivalence: equivalent network by reversing the
-        gates order, basically U^{\dagger}
+        #group the element by occurences, only the ones that
+        #occur more than once, has potential to be a sanwdich
+        sw = [k for k,l in groupby(sorted(self.netgates)) if len(list(l))>1]
+
+        #a list of contains network, and index where it starts
+        sidx, i = [], 0
+        for k, l in groupby(self.netgates):
+            if k in sw:
+                sidx += [(k, i)]
+            i += len(list(l))
+
+        #start index by keys, sorted already
+        sikey = dict([(k,[]) for k in sw ])
+        for k, idx in sidx :
+            sikey[k].append(idx)
+
+        #get all combinations of sandwiches
+        #unique up to the conjugation by swap
+        unet = []
+        for k, sidx in sikey.items():
+            idxs =[(a,b) for a,b in combinations(sidx,2) if (b-a)>1]
+            s1,s2 = bitop.pos_of_ones(k)
+            for i1, i2 in idxs :
+                #swap indices between i1 xxx i2, by sandwiching with swap k
+                new_net = list(self.netgates)
+                for i in range(i1+1, i2):
+                    new_net[i] = bitop.swap(self.netgates[i],s1,s2)
+                unet.append(tuple(new_net))
+
+        unet = set(unet)
+        unet.remove(self.netgates)
+        return unet
+
+
+    def equivnet_time_reversal(self):
+        """
+        Return network, which is it's time-reversal
+        equivalence: equivalent network by reversing the gates order, basically
+        U^{\dagger}
         """
         return self.netgates[::-1]
-
-
-    def equivby_bit_permutation(self):
-        """
-        Return a set of equivalent networks by
-        bit-relabelling, basically performing identical swaps in the beginning
-        and the end, equivalent with simple permutation, excluding identity
-        """
-        labels = permutations(range(self.nqubit))
-        result = set([tuple(bitop.shuffle(g, l) for g in self.netgates) for l in labels])
-        result.remove(self.netgates) #remove the identity element
-        return result
-
-
-    def equivby_swap_conjugation(self):
-        """
-        Set attribute equivby_swap_conjugation: Equivalent network that is
-        equivalent by swapping conjugation.  Choose the a gates sandwiched by
-        identical gates, then swap it.
-        """
-        result = []
-        for j, g in enumerate(self.netgates[1:-1]) : #inside big sandwich
-            mnet = list(self.netgates)  #get a mutable object
-            g1, g2 = self.netgates[j], self.netgates[j+2]  #small sandwich g1|g|g2
-            if g1 == g2 :
-                poss = bitop.pos_of_ones(g1)
-                g_swapped = bitop.swap(g,*poss)
-                mnet[j+1] = g_swapped
-
-                if tuple(mnet)!= self.netgates :
-                    result += [tuple(mnet)]
-
-        self.equivby_swap_conjugation = list(set(result))
-
 
     def draw_graph(self, outfile='graphnet.png'):
         """
@@ -183,8 +194,13 @@ class GraphQNet:
 
     def is_isomorphic_to(self, GQN):
         """
-        Check if G_test is isomorphic to another GraphQNet instance
+        Check if G_test is isomorphic to another GraphQNet instance.
+        It includes bit-permutation and conjugation by swap in DS criteria
         """
+        #todo, directly check the conjugation by swap
+     #  orders = sorted([x['ordering'] for x in edge_data.values()])
+     #  len_edges = [len(list((gr))) for gr in consecutive_groups(orders)]
+
         return nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
 
 
@@ -254,8 +270,8 @@ class bitop:
         """
         return (num & (1 << k)) >> k
 
-    @staticmethod
-    def swap(num, p1, p2):
+    @classmethod
+    def swap(cls, num, p1, p2):
         """
         Swap p1-th bit with p2-th bit within number num
 
@@ -268,8 +284,8 @@ class bitop:
         :num: int, the number
         :permutaion: tup
         """
-        b1 = bit_at(num, p1)
-        b2 = bit_at(num, p2)
+        b1 = cls.bit_at(num, p1)
+        b2 = cls.bit_at(num, p1)
 
         # XOR the two
         xor = b1^b2
@@ -301,18 +317,18 @@ class bitop:
         return tuple(poss)
 
 
-    @staticmethod
-    def shuffle(num, permutation):
+    @classmethod
+    def shuffle(cls, num, permutation):
         """
         Shuffle the binary of num with some position permutation
 
         :num: int, the number
-        :permutaion: tuple(int), the final permutation
+        :permutation: tuple(int), the final permutation
         """
         num2 = 0
         for i, new_pos in enumerate(permutation):
             # updating from right to left 0xxx | j000
-            num2 =  num2 | (bit_at(num, new_pos) << i)
+            num2 =  num2 | (cls.bit_at(num, new_pos) << i)
 
         return num2
 
