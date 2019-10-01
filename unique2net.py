@@ -61,7 +61,7 @@ def iterate_graphqnet_noniso(nqubit, graphqnet_list, net_edges):
 
 
 
-def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_graphs=False):
+def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_graphs=False, conjugation_by_swap=True, time_reversal=False):
     """ List uninque non-isomorphic graph by iterating it
 
     :nqubit: int, the number of qubits
@@ -71,6 +71,8 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
              that will store the unique 2-bit gates network.
     :start_gqns:list(GraphQNet), the list of unique GraphQNet object as starting point of iteration
     :draw_graphs:boolean, if draw all the resulting graphs. It will drawn inside the outdir folder
+    :conjugation_by_swap: boolean=True, consider elimination by swap conjugation
+    :time_reversal: boolean=True, consider elimination by time reversal
     """
     # setup directories, files, and initial variables
     outdir = outdir if outdir else 'out'
@@ -90,22 +92,37 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
         nedge += 1
 
         #eliminate the conjugation by swaps
-        for i,gqn in enumerate(gqn_list):
-            equiv_gqn = gqn.conjugation_by_swap()
-            to_elim = False
-            for gqn2 in gqn_list[i+1:]:
-                if gqn2.is_isomorphic_uptolist(equiv_gqn):
-                    to_elim = True
-                    break
-            if to_elim :
-                gqn_list[i]=False
-        gqn_list = [gq for gq in gqn_list if gq]
+        if conjugation_by_swap:
+            for i,gqn in enumerate(gqn_list):
+                equiv_gqn = gqn.conjugation_by_swap()
+                to_elim = False
+                for gqn2 in gqn_list[i+1:]:
+                    if gqn2.is_isomorphic_uptolist(equiv_gqn):
+                        to_elim = True
+                        break
+                if to_elim :
+                    gqn_list[i]=False
+            gqn_list = [gq for gq in gqn_list if gq]
 
+        #eliminate the time reversal
+        if  time_reversal:
+            for i,gqn in enumerate(gqn_list):
+                equiv_gqn = gqn.equivnet_time_reversal()
+                to_elim = False
+                for gqn2 in gqn_list[i+1:]:
+                    if gqn2.is_isomorphic_to(equiv_gqn):
+                        to_elim = True
+                        break
+                if to_elim :
+                    gqn_list[i]=False
+            gqn_list = [gq for gq in gqn_list if gq]
 
         # storing results
         res_path = '%s/net-%iQ-%iE.json'%(outdir,nqubit,nedge)
         res = {'nqubit':nqubit,
                'time': time()-start_time,
+               'conjugation_by_swap': conjugation_by_swap,
+               'time_reversal': time_reversal,
                'networks':[gqn.netgates for gqn in gqn_list]
                }
         with open(res_path, 'w+') as outf :
@@ -123,7 +140,7 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
 
 
 
-def unique2net(nqubit, net_depth, **kwargs):
+def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, dirpath='out', ncpu=False, conjugation_by_swap=True, time_reversal=False):
     """
     Get a list of 2-bit gates networks. The unique gates are iterated by the following steps:
         1) iterate the non-isomorphic graph up to gate ordering
@@ -132,14 +149,14 @@ def unique2net(nqubit, net_depth, **kwargs):
     param
         :nqubit: int, the number of qubits
         :net_depth: int, the depth of the gate-networks
-        **kwargs
-            :draw_graphs: boolean=True, to draw the produced graphs
-            :ncpu:int=cpu_count, the number of cpu in parallelization
-            :dirpath: str=out, directory path to store outputs
-            :ds_time_reversal:boolean=False, include time reversal criteria
-            :startfile:str=False, the file that store unique networks. The file must
-                be in format of dictionary {'nqubits':int, 'networks':[(int,int),..]}.If
-                it is present, the iteration will be started from there.
+        :startfile: str=False, the file that stores unique networks. The file must
+                    be in format of dictionary {'nqubits':int, 'networks':[(int,int),..]}.If
+                    it is present, the iteration will be started from there.
+        :draw_graphs: boolean=True, to draw the produced graphs
+        :dirpath: str=out, directory path to store outputs
+        :ncpu: int=cpu_count, the number of cpu in parallelization
+        'conjugation_by_swap'
+        :time_reversal: boolean=False, include time reversal criteria
 
     return
         [(int,int,..),(...),...] a list of 2-bit networks gates, with the LSB
@@ -152,17 +169,10 @@ def unique2net(nqubit, net_depth, **kwargs):
             q2 ---o--
         where (q0,q1)=3, (q0,q2)=5
     """
-    #optional arguments
-
-    opt = { 'draw_graphs': True, 'dirpath':'out', 'ds_time_reversal': False,
-           'ncpu':cpu_count(), 'startfile':False}
-
-    for key in opt:
-        if key in kwargs : opt[key]=kwargs[key]
-
+    ncpu = ncpu if ncpu else cpu_count()
     start_gqns = False
-    if opt['startfile']:
-        with open(opt['startfile']) as iff:
+    if startfile:
+        with open(startfile) as iff:
             gqn_list = json.load(iff)['networks']
             start_depth = len(gqn_list[0])
             start_gqns = [ GraphQNet(start_depth, x) for x in gqn_list]
@@ -172,8 +182,9 @@ def unique2net(nqubit, net_depth, **kwargs):
 
     start=time()
 
-    unique_net = graphqnet_noniso(nqubit, net_depth, outdir=opt['dirpath'],
-                                  start_gqns=start_gqns, draw_graphs=opt['draw_graphs'])
+    unique_net = graphqnet_noniso(nqubit, net_depth, outdir=dirpath,
+                                  start_gqns=start_gqns, draw_graphs=draw_graphs,
+                                  conjugation_by_swap=conjugation_by_swap, time_reversal=time_reversal)
 
     print('%i unique networks is calculated in %f seconds'%(len(unique_net),time()-start))
 

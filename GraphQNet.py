@@ -177,7 +177,7 @@ class GraphQNet:
         equivalence: equivalent network by reversing the gates order, basically
         U^{\dagger}
         """
-        return self.netgates[::-1]
+        return GraphQNet(self.nqubit, self.netgates[::-1])
 
     def draw_graph(self, outfile='graphnet.png'):
         """
@@ -201,17 +201,7 @@ class GraphQNet:
         Check if G_test is isomorphic to another GraphQNet instance.
         It includes bit-permutation and conjugation by swap in DS criteria
         """
-        truth = nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
-        return truth
-        if truth :
-            return True
-        else :
-            for gqn in self.conjugation_by_swap():
-                if nx.is_isomorphic(gqn.graph, GQN.graph, edge_match=self.__compare_edges):
-                    return True
-        return False
-
-
+        return  nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
 
     def is_isomorphic_uptolist(self, list_gqn):
         """
