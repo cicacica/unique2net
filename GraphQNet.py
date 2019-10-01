@@ -131,7 +131,7 @@ class GraphQNet:
         return False
 
     def conjugation_by_swap(self):
-        """ Return a set of networks, the equivalent networks by swap conjugation, if there is any.
+        """ Return a set of GraphQNet objects, the equivalent networks by swap conjugation, if there is any.
         """
         #group the element by occurences, only the ones that
         #occur more than once, has potential to be a sanwdich
@@ -163,8 +163,12 @@ class GraphQNet:
                 unet.append(tuple(new_net))
 
         unet = set(unet)
-        unet.remove(self.netgates)
-        return unet
+        if self.netgates in unet :
+            unet.remove(self.netgates)
+
+        gqn_list = [GraphQNet(self.nqubit, net) for net in unet]
+
+        return gqn_list
 
 
     def equivnet_time_reversal(self):
@@ -197,11 +201,16 @@ class GraphQNet:
         Check if G_test is isomorphic to another GraphQNet instance.
         It includes bit-permutation and conjugation by swap in DS criteria
         """
-        #todo, directly check the conjugation by swap
-     #  orders = sorted([x['ordering'] for x in edge_data.values()])
-     #  len_edges = [len(list((gr))) for gr in consecutive_groups(orders)]
+        truth = nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
+        return truth
+        if truth :
+            return True
+        else :
+            for gqn in self.conjugation_by_swap():
+                if nx.is_isomorphic(gqn.graph, GQN.graph, edge_match=self.__compare_edges):
+                    return True
+        return False
 
-        return nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
 
 
     def is_isomorphic_uptolist(self, list_gqn):
@@ -243,7 +252,7 @@ class GraphQNet:
         P.map(__helper_draw_a_graph, args)
 
         # combine graphs per row, then combine all rows
-        images_per_row = images_per_row if images_per_row else int(log10(len(args)))*5
+        images_per_row = images_per_row if images_per_row else max(int(log10(len(args))),1)*5
         fpathss = array_split(glob(outdir+'/*.png') ,max(ceil(len(args)/images_per_row),1))
         for i,row in enumerate(fpathss):
             run(['convert', *list(row), '+append', '-border','20','%s/row%i.png'%(outdir,i)])
@@ -285,7 +294,7 @@ class bitop:
         :permutaion: tup
         """
         b1 = cls.bit_at(num, p1)
-        b2 = cls.bit_at(num, p1)
+        b2 = cls.bit_at(num, p2)
 
         # XOR the two
         xor = b1^b2

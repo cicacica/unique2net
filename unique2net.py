@@ -89,6 +89,19 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
         gqn_list = iterate_graphqnet_noniso(nqubit, gqn_list, net_edges)
         nedge += 1
 
+        #eliminate the conjugation by swaps
+        for i,gqn in enumerate(gqn_list):
+            equiv_gqn = gqn.conjugation_by_swap()
+            to_elim = False
+            for gqn2 in gqn_list[i+1:]:
+                if gqn2.is_isomorphic_uptolist(equiv_gqn):
+                    to_elim = True
+                    break
+            if to_elim :
+                gqn_list[i]=False
+        gqn_list = [gq for gq in gqn_list if gq]
+
+
         # storing results
         res_path = '%s/net-%iQ-%iE.json'%(outdir,nqubit,nedge)
         res = {'nqubit':nqubit,
