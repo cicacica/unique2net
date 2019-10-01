@@ -24,15 +24,40 @@ L = unique2net(number_of_qubits, depth_of_networks)
 ```
 
 #### With default setting
-```sh
-unique2net(nqubit, net_depth, path_json=False, draw_graphs=True, save_edges=True,
-            dirpath=[out-number_of_qubits]qubit-depth[depth_of_networks],
-            ds_bit_permutation=False, ds_conjugation_by_swap=True,
-            ds_time_reversal= False, ncpu=cpu_count())
-```
 
-### Draw the graphs based on equivalence classes defined in DS paper
 ```sh
-test_draw_by_equivalents(number_of_qubits,depth_of_networks,ncpu=4,images_per_row=4,dirpath='out')
+unique2net(
+    nqubit,
+    net_depth,
+    startfile=False,
+    draw_graphs=True,
+    dirpath='out',
+    ncpu=False,
+    conjugation_by_swap=True,
+    time_reversal=False,
+)
 ```
-the result for 4 qubits with depth 4 is shown in the folder example
+param
+    :nqubit: int, the number of qubits
+    :net_depth: int, the depth of the gate-networks
+    :startfile: str=False, the file that stores unique networks. The file must
+                be in format of dictionary {'nqubits':int, 'networks':[(int,int),..]}.If
+                it is present, the iteration will be started from there.
+    :draw_graphs: boolean=True, to draw the produced graphs
+    :dirpath: str=out, directory path to store outputs
+    :ncpu: int=cpu_count, the number of cpu in parallelization
+    'conjugation_by_swap'
+    :time_reversal: boolean=False, include time reversal criteria
+
+return
+    [(int,int,..),(...),...] a list of 2-bit networks gates, with the LSB
+    convention. For example:
+    ```
+      network (3,5) is
+        q0 -o-o--
+            | |
+        q1 -o-|--
+              |
+        q2 ---o--
+    where (q0,q1)=3, (q0,q2)=5
+    ```
