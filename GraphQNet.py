@@ -27,7 +27,7 @@ from subprocess import run
 from multiprocessing import Pool, cpu_count
 from glob import glob
 from numpy import array_split
-from math import ceil
+from math import ceil, log10
 from itertools import combinations
 from more_itertools import consecutive_groups
 
@@ -201,13 +201,13 @@ class GraphQNet:
 
 
     @staticmethod
-    def draw_netgraphs_list(netgates_list, nqubit, images_per_row=4, outfile='picture.png', ncpu=False):
+    def draw_netgraphs_list(netgates_list, nqubit, images_per_row=False, outfile='picture.png', ncpu=False):
         """
         Get a picture contains graphs, where each graph is in netgates_list.
 
         :netgates_list:list(tuple(int))  the gate networks
         :nqubit:int, the number of qubits
-        :images_per_row:int, the number of graph displayed per row
+        :images_per_row:False, the number of graph displayed per row
         :outpath:str, the path for the output
         :ncpu:int, the cpu number
         """
@@ -227,6 +227,7 @@ class GraphQNet:
         P.map(__helper_draw_a_graph, args)
 
         # combine graphs per row, then combine all rows
+        images_per_row = images_per_row if images_per_row else int(log10(len(args)))*5
         fpathss = array_split(glob(outdir+'/*.png') ,max(ceil(len(args)/images_per_row),1))
         for i,row in enumerate(fpathss):
             run(['convert', *list(row), '+append', '-border','20','%s/row%i.png'%(outdir,i)])

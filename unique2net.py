@@ -85,12 +85,16 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
 
     # iteration part
     while nedge < net_depth:
+        start_time = time()
         gqn_list = iterate_graphqnet_noniso(nqubit, gqn_list, net_edges)
         nedge += 1
 
         # storing results
         res_path = '%s/net-%iQ-%iE.json'%(outdir,nqubit,nedge)
-        res = {'nqubit':nqubit, 'networks':[gqn.netgates for gqn in gqn_list]}
+        res = {'nqubit':nqubit,
+               'time': time()-start_time,
+               'networks':[gqn.netgates for gqn in gqn_list]
+               }
         with open(res_path, 'w+') as outf :
             json.dump(res, outf)
 
@@ -146,15 +150,19 @@ def unique2net(nqubit, net_depth, **kwargs):
     start_gqns = False
     if opt['startfile']:
         with open(opt['startfile']) as iff:
-            gqn_list = json.load(qgn_list)
-            start_gqns = [ GraphQNet(len(x), x) for x in gqn_list]
+            gqn_list = json.load(iff)['networks']
+            start_depth = len(gqn_list[0])
+            start_gqns = [ GraphQNet(start_depth, x) for x in gqn_list]
+            if start_depth >= net_depth :
+                print("nothing to do here")
+                return
 
     start=time()
+
     unique_net = graphqnet_noniso(nqubit, net_depth, outdir=opt['dirpath'],
                                   start_gqns=start_gqns, draw_graphs=opt['draw_graphs'])
 
     print('%i unique networks is calculated in %f seconds'%(len(unique_net),time()-start))
-
 
     return unique_net
 
