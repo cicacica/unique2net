@@ -28,6 +28,8 @@ from multiprocessing import Pool, cpu_count
 from glob import glob
 from numpy import array_split
 from math import ceil
+from itertools import combinations
+from more_itertools import consecutive_groups
 
 
 
@@ -45,7 +47,6 @@ class GraphQNet:
     """
     Network of 2-qubit gates object
     """
-
     def __init__(self, nqubit, netgates):
         """ Instantiation of the GraphQNet object. That is the object contains
         a 2-bit gates network and can has some graph representation.
@@ -57,6 +58,7 @@ class GraphQNet:
         self.netgates = netgates
         self.outdir = False
         self.graph = False
+        self.depth = len(netgates)
 
         #set some stuff
         self.set_out_dir()
@@ -70,8 +72,16 @@ class GraphQNet:
 
             :edges: list(tuple), the list of edges
         """
-        return tuple([2**a+2**b for a,b in edges])
+        return tuple([bitop.pos_ones_toint(*e) for e in edges])
 
+    def add_ordered_edge(self, edge):
+        """ Add an edge with ordering as number of edge --- ordering starts from 0
+
+        :edge:tupe(int,int) the edge
+        """
+        self.graph.add_edge((*edge, self.depth), weight='ordering')
+        self.depth += 1
+        self.netgates = (*self.netgates, bitop.pos_ones_toint(*edge))
 
     @staticmethod
     def net_to_edges(netgates):
@@ -100,6 +110,18 @@ class GraphQNet:
         self.outdir = outdir[0] if outdir else os.getcwd()
         run(['mkdir', '-p', self.outdir])
 
+
+    def more_three_con_edges(self):
+        """ Tells if the network has more than three consecutive edges
+        """
+        for edge in combinations(range(self.nqubit), 2):
+            edge_data = self.graph.get_edge_data(*edge)
+            if edge_data :
+                orders = sorted([x['ordering'] for x in edge_data.values()])
+                len_edges = [len(list((gr))) for gr in consecutive_groups(orders)]
+                if 4 in len_edges :
+                    return True
+        return False
 
     def equivby_time_reversal(self):
         """
@@ -158,6 +180,7 @@ class GraphQNet:
     def __compare_edges(G1, G2):
         return G1[0]['ordering'] == G2[0]['ordering']
 
+
     def is_isomorphic_to(self, GQN):
         """
         Check if G_test is isomorphic to another GraphQNet instance
@@ -165,12 +188,24 @@ class GraphQNet:
         return nx.is_isomorphic(self.graph, GQN.graph, edge_match=self.__compare_edges)
 
 
+    def is_isomorphic_uptolist(self, list_gqn):
+        """
+        Check if the network is isomorphic, compared to every
+        element in list_gqn.
+        :list_gqn:list(GraphQNet) list of objects GraphQNet
+        """
+        for gqn in list_gqn:
+            if self.is_isomorphic_to(gqn):
+                return True
+        return False
+
+
     @staticmethod
-    def draw_graphs_from_netgates(netgates_list, nqubit, images_per_row=4, outfile='picture.png', ncpu=False):
+    def draw_netgraphs_list(netgates_list, nqubit, images_per_row=4, outfile='picture.png', ncpu=False):
         """
         Get a picture contains graphs, where each graph is in netgates_list.
 
-        :netgate_list:tuple(int), the gate networks
+        :netgates_list:list(tuple(int))  the gate networks
         :nqubit:int, the number of qubits
         :images_per_row:int, the number of graph displayed per row
         :outpath:str, the path for the output
@@ -281,4 +316,15 @@ class bitop:
         return num2
 
 
+    @staticmethod
+    def pos_ones_toint(*args):
+        """
+        Return the integer given posisition of ones of a bitstring
+
+        :args:int, the posisions of ones
+        """
+        res = 0
+        for a in args :
+            res += 2**a
+        return res
 
