@@ -32,7 +32,7 @@ unique2net(
     startfile=False,
     draw_graphs=True,
     dirpath='out',
-    ncpu=False,
+    ncpu=cpu_count(),
     conjugation_by_swap=True,
     time_reversal=False,
 )
@@ -52,12 +52,15 @@ param
 return
     [(int,int,..),(...),...] a list of 2-bit networks gates, with the LSB
     convention. For example:
-    ```
-      network (3,5) is
+       network (3,5) is
+    <pre>   
+    
         q0 -o-o--
             | |
         q1 -o-|--
               |
         q2 ---o--
-    where (q0,q1)=3, (q0,q2)=5
-    ```
+
+   </pre>
+    
+   where (q0,q1)=3, (q0,q2)=5
