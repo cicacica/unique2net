@@ -22,6 +22,13 @@ from unique2net import unique2net
 
 L = unique2net(number_of_qubits, depth_of_networks)
 ```
+## Start iteration from existing result
+Here, calculate network with 5 qubits, depth 5, from the result of 5 qubits, depth 4.
+```sh
+from unique2net import unique2net
+
+L = unique2net(5, 5, startfile='out/net-5Q-4E.json')
+```
 
 #### With default setting
 
@@ -64,3 +71,10 @@ return
    </pre>
     
    where (q0,q1)=3, (q0,q2)=5
+
+## example, with result in out folder 
+```sh
+from unique2net import unique2net
+
+L = unique2net(5, 5, time_reversal=True)
+```
