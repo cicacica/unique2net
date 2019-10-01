@@ -4,8 +4,8 @@ __doc__=""" unique2net.py: list all unique gates criteria of
 DiVincenzo and Smolin (cond-mat/9409111).
 
 The unique gates are iterated by the following steps:
-    1) iterate the non-isomorphic graph (non-parallell)
-    2) place edge ordering from 1). At this step, the relabelling qubit has already implemented.
+    1) iterate the non-isomorphic graph up to ordering(non-parallell)
+    2) At this step, the relabelling qubit has already implemented.
     3) apply more criteria of Divincenzo and Smolin: time reversal and conjugation by swapping
 
 
@@ -18,7 +18,7 @@ MAIN USAGE:
 """
 __author__ = "Cica Gustiani"
 __license__ = "GPL"
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 __maintainer__ = "Cica Gustiani"
 __email__ = "cicagustiani@gmail.com"
 
@@ -28,7 +28,7 @@ __email__ = "cicagustiani@gmail.com"
 from itertools import combinations
 from time import time
 from subprocess import run
-from multiprocessing import cpu_count
+from multiprocessing import cpu_count, Pool
 import json
 
 #additional library
@@ -61,7 +61,43 @@ def iterate_graphqnet_noniso(nqubit, graphqnet_list, net_edges):
 
 
 
-def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_graphs=False, conjugation_by_swap=True, time_reversal=False):
+def __helper_idx_conjugation_by_swap(args):
+    return __idx_conjugation_by_swap(*args)
+
+
+def __idx_conjugation_by_swap(gqn_list, idx):
+    """
+    return the index when it is equivalent by swap conjugation
+    :gqn_list: the whole GraphQNet list
+    :idx: the index to be checked
+    """
+    equiv_gqn = gqn_list[idx].conjugation_by_swap()
+    for gqn2 in gqn_list[idx+1:]:
+        if gqn2.is_isomorphic_uptolist(equiv_gqn):
+            return idx
+    return False
+
+
+def __helper_idx_time_reversal(args):
+    return __idx_time_reversal(*args)
+
+
+def __idx_time_reversal(gqn_list, idx):
+    """
+    return the index when it is equivalent by swap conjugation
+    :gqn_list: the whole GraphQNet list
+    :idx: the index to be checked
+    """
+    equiv_gqn = gqn_list[idx].time_reversal()
+    for gqn2 in gqn_list[idx+1:]:
+        if gqn2.is_isomorphic_to(equiv_gqn):
+            return idx
+    return False
+
+
+
+
+def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_graphs=False, ncpu=False, conjugation_by_swap=True, time_reversal=False):
     """ List uninque non-isomorphic graph by iterating it
 
     :nqubit: int, the number of qubits
@@ -71,6 +107,7 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
              that will store the unique 2-bit gates network.
     :start_gqns:list(GraphQNet), the list of unique GraphQNet object as starting point of iteration
     :draw_graphs:boolean, if draw all the resulting graphs. It will drawn inside the outdir folder
+    :ncpu:int=cpu_count(),the cpu number for parallelization
     :conjugation_by_swap: boolean=True, consider elimination by swap conjugation
     :time_reversal: boolean=True, consider elimination by time reversal
     """
@@ -84,7 +121,7 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
         nedge, gqn_list = 1, [GraphQNet(nqubit, (bitop.pos_ones_toint(0,1),))]
 
     net_edges = [bitop.pos_ones_toint(*e) for e in combinations(range(nqubit),2)]
-
+    ncpu = ncpu if ncpu else cpu_count()
     # iteration part
     while nedge < net_depth:
         start_time = time()
@@ -93,36 +130,32 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
 
         #eliminate the conjugation by swaps
         if conjugation_by_swap:
-            for i,gqn in enumerate(gqn_list):
-                equiv_gqn = gqn.conjugation_by_swap()
-                to_elim = False
-                for gqn2 in gqn_list[i+1:]:
-                    if gqn2.is_isomorphic_uptolist(equiv_gqn):
-                        to_elim = True
-                        break
-                if to_elim :
-                    gqn_list[i]=False
+            lenl = len(gqn_list)
+            P = Pool(ncpu)
+            to_elim = P.map(__helper_idx_conjugation_by_swap, zip([gqn_list]*lenl, range(lenl)))
+
+            for i in filter(lambda x: x, to_elim) :
+                gqn_list[i] = False
             gqn_list = [gq for gq in gqn_list if gq]
 
         #eliminate the time reversal
-        if  time_reversal:
-            for i,gqn in enumerate(gqn_list):
-                equiv_gqn = gqn.equivnet_time_reversal()
-                to_elim = False
-                for gqn2 in gqn_list[i+1:]:
-                    if gqn2.is_isomorphic_to(equiv_gqn):
-                        to_elim = True
-                        break
-                if to_elim :
-                    gqn_list[i]=False
+        if time_reversal:
+            lenl = len(gqn_list)
+            P = Pool(ncpu)
+            to_elim = P.map(__helper_idx_time_reversal, zip([gqn_list]*lenl, range(lenl)))
+
+            for i in filter(lambda x: x, to_elim) :
+                gqn_list[i] = False
             gqn_list = [gq for gq in gqn_list if gq]
 
         # storing results
         res_path = '%s/net-%iQ-%iE.json'%(outdir,nqubit,nedge)
         res = {'nqubit':nqubit,
+               'depth':nedge,
                'time': time()-start_time,
                'conjugation_by_swap': conjugation_by_swap,
                'time_reversal': time_reversal,
+               'start_gate': start_gqns[0].depth  if start_gqns else 1,
                'networks':[gqn.netgates for gqn in gqn_list]
                }
         with open(res_path, 'w+') as outf :
@@ -173,10 +206,12 @@ def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, dirpath='ou
     start_gqns = False
     if startfile:
         with open(startfile) as iff:
-            gqn_list = json.load(iff)['networks']
-            start_depth = len(gqn_list[0])
-            start_gqns = [ GraphQNet(start_depth, x) for x in gqn_list]
-            if start_depth >= net_depth :
+            sdata = json.load(iff)
+            sdepth = sdata['depth']
+            gqn_list = sdata['networks']
+            snqubit = sdata['nqubit']
+            start_gqns = [GraphQNet(snqubit, x) for x in gqn_list]
+            if sdepth >= net_depth :
                 print("nothing to do here")
                 return
 

@@ -108,7 +108,7 @@ class GraphQNet:
         self.graph = nx.MultiGraph()
         self.graph.add_weighted_edges_from(wedges, weight='ordering')
         if len(self.graph.node()) > self.nqubit :
-            raise ValueError('Hi there, you need at least %i qubits --- or nodes'%len(self.graph.nodes()))
+            raise ValueError('Hi there, you need at least %i qubits'%len(self.graph.nodes()))
         self.graph.add_nodes_from(range(self.nqubit))
 
 
@@ -171,7 +171,7 @@ class GraphQNet:
         return gqn_list
 
 
-    def equivnet_time_reversal(self):
+    def time_reversal(self):
         """
         Return network, which is it's time-reversal
         equivalence: equivalent network by reversing the gates order, basically
