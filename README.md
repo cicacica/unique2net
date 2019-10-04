@@ -23,6 +23,9 @@ from unique2net import unique2net
 
 L = unique2net(number_of_qubits, depth_of_networks)
 ```
+For a faster result, set `draw_graphs=False`. It prevents drawing graphs, since it takes most
+of the time.
+
 ## Start iteration from existing result
 Here, calculate network with 5 qubits, depth 5, from the result of 5 qubits, depth 4.
 ```sh
