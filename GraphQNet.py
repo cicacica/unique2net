@@ -107,7 +107,7 @@ class GraphQNet:
         wedges = [(*e, i) for i,e in enumerate(self.net_to_edges(self.netgates))]
         self.graph = nx.MultiGraph()
         self.graph.add_weighted_edges_from(wedges, weight='ordering')
-        if len(self.graph.node()) > self.nqubit :
+        if len(self.graph.nodes()) > self.nqubit :
             raise ValueError('Hi there, you need at least %i qubits'%len(self.graph.nodes()))
         self.graph.add_nodes_from(range(self.nqubit))
 
