@@ -54,6 +54,15 @@ class GraphQNet:
         :nqubit: int, the number of qubits.
         :netgates: tuple(int), the gate network
         """
+        # input checks
+        if type(nqubit) != int :
+            raise TypeError('nqubit -- number of qubits -- requires int')
+        if type(netgates) == tuple :
+            if type(netgates[0]) == int :
+                pass
+        else :
+            raise TypeError('netgates is a tuple of integers')
+
         self.nqubit = nqubit
         self.netgates = netgates
         self.outdir = False
