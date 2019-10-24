@@ -219,7 +219,7 @@ def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, dirpath='ou
 
     unique_net = graphqnet_noniso(nqubit, net_depth, outdir=dirpath,
                                   start_gqns=start_gqns, draw_graphs=draw_graphs,
-                                  conjugation_by_swap=conjugation_by_swap, time_reversal=time_reversal)
+                                  ncpu = ncpu, conjugation_by_swap=conjugation_by_swap, time_reversal=time_reversal)
 
     print('%i unique networks is calculated in %f seconds'%(len(unique_net),time()-start))
 
