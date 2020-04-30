@@ -193,7 +193,9 @@ class GraphQNet:
         :outfile:output file
         """
         gv = pgv.AGraph(directed=False, strict=False)
-        gv.add_nodes_from(range(self.nqubit))
+
+        for node in range(self.nqubit):
+            gv.add_node(node, shape='circle')
         for i,gate in enumerate(self.netgates) :
             gv.add_edge(*bitop.pos_of_ones(gate), label=str(i))
         gv.layout()
@@ -225,7 +227,7 @@ class GraphQNet:
 
 
     @staticmethod
-    def draw_netgraphs_list(netgates_list, nqubit, images_per_row=False, outfile='picture.png', ncpu=False):
+    def draw_netgraphs_list(netgates_list, nqubit, images_per_row=False, outfile='picture.png', nrow=False, ncpu=False):
         """
         Get a picture contains graphs, where each graph is in netgates_list.
 
@@ -233,6 +235,7 @@ class GraphQNet:
         :nqubit:int, the number of qubits
         :images_per_row:False, the number of graph displayed per row
         :outpath:str, the path for the output
+        :nrow:int, the number of row of image tiles
         :ncpu:int, the cpu number
         """
         def get_netid(net):
@@ -252,14 +255,18 @@ class GraphQNet:
         P.close()
         P.join()
 
-        # combine graphs per row, then combine all rows
-        images_per_row = images_per_row if images_per_row else max(int(log10(len(args))),1)*5
-        fpathss = array_split(glob(outdir+'/*.png') ,max(ceil(len(args)/images_per_row),1))
-        for i,row in enumerate(fpathss):
-            run(['convert', *list(row), '+append', '-border','2','-alpha','set','%s/row%i.png'%(outdir,i)])
+        fpaths = glob(outdir+'/*.png')
+        num_row = nrow if nrow else max(int(ceil(len(args)/8)),1) 
+        run(['montage', *list(fpaths), '-mode', 'Concatenate', '-tile' ,  'x%i'%num_row,  outfile ])
 
-        # combine all graph and remove the image per graph
-        run(['convert', *glob('%s/row*.png'%outdir),'-append','-border','2', '-alpha','set',outfile])
+   #    # combine all graphs per row, then combine all rows
+   #    images_per_row = images_per_row if images_per_row else max(int(log10(len(args))),1)*5
+   #    fpathss = array_split(glob(outdir+'/*.png') ,max(ceil(len(args)/images_per_row),1))
+   #    for i,row in enumerate(fpathss):
+   #        run(['convert', *list(row), '+append', '-border','2','-alpha','set','%s/row%i.png'%(outdir,i)])
+
+   #    # combine all graph and remove the image per graph
+   #    run(['convert', *glob('%s/row*.png'%outdir),'-append','-border','2', '-alpha','set',outfile])
         run(['rm', '-r', outdir])
 
 
