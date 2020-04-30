@@ -249,15 +249,17 @@ class GraphQNet:
 
         P = Pool(ncpu)
         P.map(__helper_draw_a_graph, args)
+        P.close()
+        P.join()
 
         # combine graphs per row, then combine all rows
         images_per_row = images_per_row if images_per_row else max(int(log10(len(args))),1)*5
         fpathss = array_split(glob(outdir+'/*.png') ,max(ceil(len(args)/images_per_row),1))
         for i,row in enumerate(fpathss):
-            run(['convert', *list(row), '+append', '-border','20','%s/row%i.png'%(outdir,i)])
+            run(['convert', *list(row), '+append', '-border','2','-alpha','set','%s/row%i.png'%(outdir,i)])
 
         # combine all graph and remove the image per graph
-        run(['convert', *glob('%s/row*.png'%outdir),'-append','-border','20',outfile])
+        run(['convert', *glob('%s/row*.png'%outdir),'-append','-border','2', '-alpha','set',outfile])
         run(['rm', '-r', outdir])
 
 

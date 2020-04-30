@@ -30,6 +30,7 @@ from time import time
 from subprocess import run
 from multiprocessing import cpu_count, Pool
 import json
+import os
 
 #additional library
 from GraphQNet import GraphQNet, bitop
@@ -40,6 +41,7 @@ from GraphQNet import GraphQNet, bitop
 def iterate_graphqnet_noniso(nqubit, graphqnet_list, net_edges):
     """
     Produce non-isomorphic graph up to edges ordering form graphqnet_list.
+    It applies criteria: bit-permutation and cojugation by swap
 
     :nqubit: int, the number of qubits
     :graphqnet_list:list(GraphQNet), list of the GraphQNet objects.
@@ -133,23 +135,48 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
             lenl = len(gqn_list)
             P = Pool(ncpu)
             to_elim = P.map(__helper_idx_conjugation_by_swap, zip([gqn_list]*lenl, range(lenl)))
-
-            for i in filter(lambda x: x, to_elim) :
-                gqn_list[i] = False
-            gqn_list = [gq for gq in gqn_list if gq]
-
-        #eliminate the time reversal
-        if time_reversal:
-            lenl = len(gqn_list)
-            P = Pool(ncpu)
-            to_elim = P.map(__helper_idx_time_reversal, zip([gqn_list]*lenl, range(lenl)))
+            P.close()
+            P.join()
 
             for i in filter(lambda x: x, to_elim) :
                 gqn_list[i] = False
             gqn_list = [gq for gq in gqn_list if gq]
 
         # storing results
-        res_path = '%s/net-%iQ-%iE.json'%(outdir,nqubit,nedge)
+        res_path = '%s/nonisonet-%iQ-%iE.json'%(outdir,nqubit,nedge)
+        res = {'nqubit':nqubit,
+               'depth':nedge,
+               'time': time()-start_time,
+               'conjugation_by_swap': conjugation_by_swap,
+               'time_reversal': False,
+               'start_gate': start_gqns[0].depth  if start_gqns else 1,
+               'networks':[gqn.netgates for gqn in gqn_list]
+               }
+        with open(res_path, 'w+') as outf :
+            json.dump(res, outf)
+
+        if draw_graphs :
+            draw_path = '%s/nonisonet-%iQ-%iE.png'%(outdir,nqubit,nedge)
+            if len(gqn_list) > 0 :
+                GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=draw_path)
+            else : print("empty result, no image is produced")
+
+
+
+    #final result paths
+    fin_path = '%s/net-%iQ-%iE.json'%(outdir,nqubit,net_depth)
+    fin_draw_path = '%s/net-%iQ-%iE.png'%(outdir,nqubit,net_depth)
+
+    #eliminate the time reversal
+    if time_reversal:
+        lenl = len(gqn_list)
+        P = Pool(ncpu)
+        to_elim = P.map(__helper_idx_time_reversal, zip([gqn_list]*lenl, range(lenl)))
+        P.close()
+        P.join()
+        for i in filter(lambda x: x, to_elim) :
+            gqn_list[i] = False
+        gqn_list = [gq for gq in gqn_list if gq]
         res = {'nqubit':nqubit,
                'depth':nedge,
                'time': time()-start_time,
@@ -158,14 +185,21 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
                'start_gate': start_gqns[0].depth  if start_gqns else 1,
                'networks':[gqn.netgates for gqn in gqn_list]
                }
-        with open(res_path, 'w+') as outf :
+        with open(fin_path, 'w+') as outf :
             json.dump(res, outf)
 
         if draw_graphs :
-            draw_path = '%s/net-%iQ-%iE.png'%(outdir,nqubit,nedge)
-            if len(gqn_list) > 0 :
-                GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=draw_path)
-            else : print("empty result, no image is produced")
+            GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=fin_draw_path)
+
+    else : 
+        part_path = '%s/nonisonet-%iQ-%iE.json'%(outdir,nqubit,net_depth)
+        os.rename(part_path,fin_path)
+
+        if draw_graphs :
+            draw_path = '%s/nonisonet-%iQ-%iE.png'%(outdir,nqubit,net_depth)
+            os.rename(draw_path, fin_draw_path)
+
+
 
     return gqn_list
 
@@ -173,7 +207,7 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
 
 
 
-def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, dirpath='out', ncpu=False, conjugation_by_swap=True, time_reversal=False):
+def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, outpath='out', ncpu=False, conjugation_by_swap=True, time_reversal=True):
     """
     Get a list of 2-bit gates networks. The unique gates are iterated by the following steps:
         1) iterate the non-isomorphic graph up to gate ordering
@@ -186,7 +220,7 @@ def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, dirpath='ou
                     be in format of dictionary {'nqubits':int, 'networks':[(int,int),..]}.If
                     it is present, the iteration will be started from there.
         :draw_graphs: boolean=True, to draw the produced graphs
-        :dirpath: str=out, directory path to store outputs
+        :outpath: str=out, directory path to store outputs
         :ncpu: int=cpu_count, the number of cpu in parallelization
         'conjugation_by_swap'
         :time_reversal: boolean=False, include time reversal criteria
@@ -217,7 +251,7 @@ def unique2net(nqubit, net_depth, startfile=False, draw_graphs=True, dirpath='ou
 
     start=time()
 
-    unique_net = graphqnet_noniso(nqubit, net_depth, outdir=dirpath,
+    unique_net = graphqnet_noniso(nqubit, net_depth, outdir=outpath,
                                   start_gqns=start_gqns, draw_graphs=draw_graphs,
                                   ncpu = ncpu, conjugation_by_swap=conjugation_by_swap, time_reversal=time_reversal)
 
