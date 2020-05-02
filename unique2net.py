@@ -130,10 +130,15 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
 
         #check if such a result exists
         res_path = '%s/nonisonet-%iQ-%iE.json'%(outdir,nqubit,nedge+1)
+
         try :
             #load from previous calculation
             with open(res_path) as inff :
                 res = json.load(inff)
+            nedge += 1
+
+            if nedge == net_depth:
+                gqn_list = [GraphQNet(nqubit, tuple(netgate)) for netgate in res['networks']]
 
         except FileNotFoundError:
             #do everything 
@@ -168,7 +173,7 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
 
         if draw_graphs :
             draw_path = '%s/nonisonet-%iQ-%iE.png'%(outdir,nqubit,nedge)
-            if path.exists(draw_path):
+            if os.path.exists(draw_path):
                 print("No figure generated, it has already done")
             else : 
                 if len(gqn_list) > 0 :
