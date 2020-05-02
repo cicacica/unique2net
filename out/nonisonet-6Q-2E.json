@@ -1,0 +1,1 @@
+{"nqubit": 6, "depth": 2, "time": 0.10737872123718262, "conjugation_by_swap": true, "time_reversal": false, "start_gate": 1, "networks": [[3, 3], [3, 5], [3, 12]]}
