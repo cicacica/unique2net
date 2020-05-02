@@ -178,6 +178,7 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
                 if len(gqn_list) > 0 :
                     GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=draw_path)
                 else : print("empty result, no image is produced")
+    print(res['networks'])
 
 
     #final result paths
