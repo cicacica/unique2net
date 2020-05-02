@@ -137,8 +137,9 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
                 res = json.load(inff)
             res['networks']=[tuple(ng) for ng in res['networks']]
             nedge += 1
-            if nedge == net_depth : 
-                gqn_list = [GraphQNet(nqubit, ng) for ng in res['networks']]
+            gqn_list = [GraphQNet(nqubit, ng) for ng in res['networks']]
+
+            print(gqn_list, res_path)
 
         except FileNotFoundError:
             #do everything 
@@ -178,7 +179,6 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
                 if len(gqn_list) > 0 :
                     GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=draw_path)
                 else : print("empty result, no image is produced")
-    print(res['networks'])
 
 
     #final result paths
