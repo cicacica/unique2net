@@ -127,40 +127,53 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
     # iteration part
     while nedge < net_depth:
         start_time = time()
-        gqn_list = iterate_graphqnet_noniso(nqubit, gqn_list, net_edges)
-        nedge += 1
 
-        #eliminate the conjugation by swaps
-        if conjugation_by_swap:
-            lenl = len(gqn_list)
-            P = Pool(ncpu)
-            to_elim = P.map(__helper_idx_conjugation_by_swap, zip([gqn_list]*lenl, range(lenl)))
-            P.close()
-            P.join()
+        #check if such a result exists
+        res_path = '%s/nonisonet-%iQ-%iE.json'%(outdir,nqubit,nedge+1)
+        try :
+            #load from previous calculation
+            with open(res_path) as inff :
+                res = json.load(inff)
 
-            for i in filter(lambda x: x, to_elim) :
-                gqn_list[i] = False
-            gqn_list = [gq for gq in gqn_list if gq]
+        except FileNotFoundError:
+            #do everything 
 
-        # storing results
-        res_path = '%s/nonisonet-%iQ-%iE.json'%(outdir,nqubit,nedge)
-        res = {'nqubit':nqubit,
-               'depth':nedge,
-               'time': time()-start_time,
-               'conjugation_by_swap': conjugation_by_swap,
-               'time_reversal': False,
-               'start_gate': start_gqns[0].depth  if start_gqns else 1,
-               'networks':[gqn.netgates for gqn in gqn_list]
-               }
-        with open(res_path, 'w+') as outf :
-            json.dump(res, outf)
+            gqn_list = iterate_graphqnet_noniso(nqubit, gqn_list, net_edges)
+            nedge += 1
+
+            #eliminate the conjugation by swaps
+            if conjugation_by_swap:
+                lenl = len(gqn_list)
+                P = Pool(ncpu)
+                to_elim = P.map(__helper_idx_conjugation_by_swap, zip([gqn_list]*lenl, range(lenl)))
+                P.close()
+                P.join()
+
+                for i in filter(lambda x: x, to_elim) :
+                    gqn_list[i] = False
+                gqn_list = [gq for gq in gqn_list if gq]
+
+
+            # storing results
+            res = {'nqubit':nqubit,
+                   'depth':nedge,
+                   'time': time()-start_time,
+                   'conjugation_by_swap': conjugation_by_swap,
+                   'time_reversal': False,
+                   'start_gate': start_gqns[0].depth  if start_gqns else 1,
+                   'networks':[gqn.netgates for gqn in gqn_list]
+                   }
+            with open(res_path, 'w+') as outf :
+                json.dump(res, outf)
 
         if draw_graphs :
             draw_path = '%s/nonisonet-%iQ-%iE.png'%(outdir,nqubit,nedge)
-            if len(gqn_list) > 0 :
-                GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=draw_path)
-            else : print("empty result, no image is produced")
-
+            if path.exists(draw_path):
+                print("No figure generated, it has already done")
+            else : 
+                if len(gqn_list) > 0 :
+                    GraphQNet.draw_netgraphs_list(res['networks'], nqubit, outfile=draw_path)
+                else : print("empty result, no image is produced")
 
 
     #final result paths
@@ -198,7 +211,6 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
         if draw_graphs :
             draw_path = '%s/nonisonet-%iQ-%iE.png'%(outdir,nqubit,net_depth)
             os.rename(draw_path, fin_draw_path)
-
 
 
     return gqn_list
