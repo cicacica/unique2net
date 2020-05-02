@@ -135,11 +135,9 @@ def graphqnet_noniso(nqubit, net_depth, outdir=False, start_gqns=False, draw_gra
             #load from previous calculation
             with open(res_path) as inff :
                 res = json.load(inff)
-            res['networks']=[tuple(ng) for ng in res['networks']]
-            nedge += 1
-            gqn_list = [GraphQNet(nqubit, ng) for ng in res['networks']]
-
-            print(gqn_list, res_path)
+                res['networks']=[tuple(ng) for ng in res['networks']]
+                gqn_list = [GraphQNet(nqubit, ng) for ng in res['networks']]
+                nedge += 1
 
         except FileNotFoundError:
             #do everything 
